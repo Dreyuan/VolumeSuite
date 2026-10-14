@@ -23,6 +23,77 @@
 
     <Window.Resources>
 
+        <!-- 自定义开关：蓝色轨道，圆头滑块 -->
+        <Style x:Key="AppToggleSwitch" TargetType="ToggleButton">
+            <Setter Property="Width" Value="41"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Grid>
+                            <Border x:Name="Track"
+                                    BorderBrush="#55FFFFFF"
+                                    BorderThickness="1"
+                                    CornerRadius="11">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#00000000"/>
+                                </Border.Background>
+                            </Border>
+                            <Border x:Name="Thumb"
+                                    Width="17" Height="17"
+                                    CornerRadius="8.5"
+                                    Background="White"
+                                    HorizontalAlignment="Left"
+                                    Margin="2.5,0,0,0">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="ThumbTransform" X="0"/>
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Track"
+                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                    To="#5B8DEF" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbTransform"
+                                                     Storyboard.TargetProperty="X"
+                                                     To="19" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Track"
+                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                    To="#00000000" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbTransform"
+                                                     Storyboard.TargetProperty="X"
+                                                     To="0" Duration="0:0:0.2">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut"/>
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <conv:StringToLucideKindConverter x:Key="LucideKindConverter"/>
 
         <DataTemplate DataType="{x:Type vm:BoolItemViewModel}">
@@ -34,8 +105,10 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Label}" FontSize="13"
                                Foreground="#E0E0E0" VerticalAlignment="Center"/>
-                    <CheckBox Grid.Column="1" IsChecked="{Binding Value}"
-                              VerticalAlignment="Center"/>
+                    <ToggleButton Grid.Column="1"
+                                  Style="{StaticResource AppToggleSwitch}"
+                                  IsChecked="{Binding Value}"
+                                  VerticalAlignment="Center"/>
                 </Grid>
             </Border>
         </DataTemplate>
