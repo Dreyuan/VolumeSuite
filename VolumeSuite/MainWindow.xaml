@@ -1,0 +1,484 @@
+﻿<ui:FluentWindow x:Class="VolumeSuite.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:vm="clr-namespace:VolumeSuite.ViewModels"
+                 xmlns:conv="clr-namespace:VolumeSuite.Converters"
+                 xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+                 Title="VolumeSuite"
+                 Width="880" Height="600"
+                 MinWidth="640" MinHeight="440"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="None"
+                 Background="Transparent"
+                 WindowStartupLocation="CenterScreen">
+
+    <ui:FluentWindow.Resources>
+
+        <conv:StringToLucideKindConverter x:Key="LucideKindConverter"/>
+
+        <DataTemplate DataType="{x:Type vm:BoolItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding Value}"
+                              VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:NumberItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Width="80"
+                             Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
+                             TextAlignment="Right" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:TextItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1" Width="180"
+                             Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
+                             VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:HotkeyItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <Border Grid.Column="1"
+                            Background="#2A2A2A" CornerRadius="6"
+                            Padding="12,6" MinWidth="160"
+                            Cursor="Hand"
+                            MouseLeftButtonDown="HotkeyBox_MouseDown">
+                        <TextBlock Text="{Binding Display}" FontSize="12"
+                                   Foreground="White" TextAlignment="Center"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:PathItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Border Background="#2A2A2A" CornerRadius="6"
+                                Padding="10,6" MinWidth="280" MaxWidth="360"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Value}" FontSize="12"
+                                       Foreground="#CCCCCC"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <Button Content="浏览" Width="56" Height="30"
+                                Margin="8,0,0,0"
+                                Click="PathBrowse_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:DropdownItemViewModel}">
+            <Border Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" FontSize="13"
+                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1"
+                              Width="220"
+                              ItemsSource="{Binding Options}"
+                              SelectedValue="{Binding CurrentValue}"
+                              SelectedValuePath="Id"
+                              DisplayMemberPath="Name"
+                              VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+    </ui:FluentWindow.Resources>
+
+    <!-- ==================== 窗口最外层 ==================== -->
+    <Grid>
+
+        <!-- ========== 第一层：覆盖整窗的底 ========== -->
+        <!-- 不透明底（图片模式显示，毛玻璃模式隐藏） -->
+        <Border x:Name="OpaqueUnderlay" Background="#FE1A1A1A"/>
+
+        <!-- 背景图 -->
+        <Image x:Name="BackgroundImage"
+               Source="pack://application:,,,/background.png"
+               Stretch="UniformToFill"
+               Opacity="0.4"
+               RenderOptions.BitmapScalingMode="HighQuality"/>
+
+        <!-- 遮罩层 -->
+        <Border x:Name="BackgroundShade" Background="#99000000"/>
+
+        <!-- ========== 第二层：标题栏 + 内容 ========== -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="VolumeSuite"/>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- ============ 左侧侧栏 ============ -->
+                <Border Grid.Column="0"
+                        Background="Transparent"
+                        BorderBrush="#33FFFFFF"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <ScrollViewer Grid.Row="0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Padding="10,12">
+                            <ItemsControl x:Name="SidebarList" ItemsSource="{Binding Tools}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="SideItem"
+                                                CornerRadius="6"
+                                                Padding="10,10"
+                                                Margin="0,0,0,2"
+                                                Cursor="Hand"
+                                                MouseLeftButtonUp="SideItem_Click"
+                                                MouseRightButtonUp="SideItem_RightClick">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#15FFFFFF"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#25FFFFFF"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Rectangle Grid.Column="0"
+                                                           Width="3" Height="16"
+                                                           Fill="#5B8DEF"
+                                                           RadiusX="1.5" RadiusY="1.5"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,0,10,0">
+                                                    <Rectangle.Style>
+                                                        <Style TargetType="Rectangle">
+                                                            <Setter Property="Opacity" Value="0"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <DataTrigger.EnterActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                 To="1" Duration="0:0:0.30"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.EnterActions>
+                                                                    <DataTrigger.ExitActions>
+                                                                        <BeginStoryboard>
+                                                                            <Storyboard>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                                 To="0" Duration="0:0:0.30"/>
+                                                                            </Storyboard>
+                                                                        </BeginStoryboard>
+                                                                    </DataTrigger.ExitActions>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Rectangle.Style>
+                                                </Rectangle>
+
+                                                <iconPacks:PackIconLucide Grid.Column="1"
+                                                                          Kind="{Binding Manifest.Glyph, Converter={StaticResource LucideKindConverter}}"
+                                                                          Width="16" Height="16"
+                                                                          Foreground="#CCCCCC"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,10,0"/>
+
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding Manifest.DisplayName}"
+                                                           FontSize="13"
+                                                           Foreground="#DDDDDD"
+                                                           VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Border Grid.Row="1"
+                                Height="1"
+                                Background="#33FFFFFF"
+                                Margin="10,4,10,4"/>
+
+                        <Border Grid.Row="2"
+                                x:Name="LauncherSettingsButton"
+                                CornerRadius="6"
+                                Padding="10,10"
+                                Margin="10,0,10,10"
+                                Cursor="Hand"
+                                MouseLeftButtonUp="LauncherSettings_Click"
+                                DataContext="{Binding LauncherSettings}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#15FFFFFF"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter Property="Background" Value="#25FFFFFF"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Rectangle Grid.Column="0"
+                                           Width="3" Height="16"
+                                           Fill="#5B8DEF"
+                                           RadiusX="1.5" RadiusY="1.5"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,10,0">
+                                    <Rectangle.Style>
+                                        <Style TargetType="Rectangle">
+                                            <Setter Property="Opacity" Value="0"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 To="1" Duration="0:0:0.30"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 To="0" Duration="0:0:0.30"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Rectangle.Style>
+                                </Rectangle>
+
+                                <iconPacks:PackIconLucide Grid.Column="1"
+                                                          Kind="Settings"
+                                                          Width="16" Height="16"
+                                                          Foreground="#CCCCCC"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,10,0"/>
+
+                                <TextBlock Grid.Column="2"
+                                           Text="启动器设置"
+                                           FontSize="13"
+                                           Foreground="#DDDDDD"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- ============ 右侧详情 ============ -->
+                <ScrollViewer Grid.Column="1" Padding="36,28,36,36"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel DataContext="{Binding SelectedTool}">
+
+                        <Grid Margin="0,0,0,28">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding Manifest.DisplayName}"
+                                           FontSize="24" FontWeight="SemiBold"
+                                           Foreground="#FFFFFF"/>
+                                <TextBlock Text="{Binding Manifest.Description}"
+                                           FontSize="13" Opacity="0.7"
+                                           Margin="0,6,0,0" Foreground="#FFFFFF"/>
+                            </StackPanel>
+
+                            <Button Grid.Column="1"
+                                    Width="44" Height="44"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    VerticalAlignment="Center"
+                                    Click="ToggleButton_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Opacity" Value="0.6"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bg" Background="Transparent" CornerRadius="22">
+                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                          VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF"/>
+                                                            <Setter Property="Opacity" Value="1"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsLauncher}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Grid Width="18" Height="18">
+                                    <Path x:Name="PlayIcon"
+                                          Data="M 0,0 L 9.6,6.6 L 0,13.2 Z"
+                                          Fill="White" Stroke="White"
+                                          StrokeThickness="5" StrokeLineJoin="Round"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="4,0,0,-1">
+                                        <Path.Style>
+                                            <Style TargetType="Path">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
+                                    <StackPanel x:Name="PauseIcon"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White"/>
+                                        <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White"
+                                                Margin="4.8,0,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding Sections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,24">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="#FFFFFF"
+                                                   Margin="4,0,0,10"/>
+                                        <Border CornerRadius="12" Padding="4">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                    <GradientStop Color="#1AFFFFFF" Offset="0"/>
+                                                    <GradientStop Color="#08FFFFFF" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <Border.BorderBrush>
+                                                <SolidColorBrush Color="#20FFFFFF"/>
+                                            </Border.BorderBrush>
+                                            <Border.BorderThickness>1</Border.BorderThickness>
+
+                                            <ItemsControl ItemsSource="{Binding Items}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <ContentControl Content="{Binding}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>
