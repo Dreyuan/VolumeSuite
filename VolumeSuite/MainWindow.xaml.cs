@@ -407,9 +407,8 @@ public partial class MainWindow : Window
         // 强制把绑定更新回 ViewModel（跟"点空白"效果相同）
         tb.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
 
-        // 让焦点离开，视觉上有个"提交了"的反馈（光标还在框里但内容已经生效）
-        var request = new TraversalRequest(FocusNavigationDirection.Next);
-        tb.MoveFocus(request);
+        // 释放键盘焦点 —— 等于"点击空白"，光标消失、无选中框
+        Keyboard.ClearFocus();
 
         e.Handled = true;
     }
