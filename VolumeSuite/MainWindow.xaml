@@ -94,6 +94,58 @@
             </Setter>
         </Style>
 
+        <!-- 自定义滑条：蓝色圆头滑块，蓝色进度 -->
+        <Style x:Key="AppSlider" TargetType="Slider">
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid VerticalAlignment="Center">
+                            <Border Height="4"
+                                    Background="#33FFFFFF"
+                                    CornerRadius="2"
+                                    VerticalAlignment="Center"/>
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="4"
+                                                        Background="#5B8DEF"
+                                                        CornerRadius="2"
+                                                        VerticalAlignment="Center"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Background="Transparent"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Grid Width="16" Height="16">
+                                                    <Ellipse Fill="#5B8DEF"/>
+                                                    <Ellipse Width="6" Height="6" Fill="White"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <conv:StringToLucideKindConverter x:Key="LucideKindConverter"/>
 
         <DataTemplate DataType="{x:Type vm:BoolItemViewModel}">
@@ -119,12 +171,27 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Label}" FontSize="13"
                                Foreground="#E0E0E0" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Width="80"
-                             Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
-                             TextAlignment="Right" VerticalAlignment="Center"/>
+                    <Slider Grid.Column="1"
+                            Style="{StaticResource AppSlider}"
+                            Width="220"
+                            Minimum="0"
+                            Maximum="1"
+                            Value="{Binding Position, Mode=TwoWay}"
+                            VerticalAlignment="Center"
+                            Margin="16,0,0,0"
+                            PreviewMouseLeftButtonDown="NumberSlider_PreviewMouseLeftButtonDown"
+                            PreviewMouseLeftButtonUp="NumberSlider_PreviewMouseLeftButtonUp"/>
+                    <TextBox Grid.Column="2"
+                             Width="70"
+                             Text="{Binding Text, UpdateSourceTrigger=LostFocus}"
+                             TextAlignment="Right"
+                             VerticalAlignment="Center"
+                             Margin="10,0,0,0"
+                             KeyDown="SettingTextBox_KeyDown"/>
                 </Grid>
             </Border>
         </DataTemplate>
@@ -140,7 +207,8 @@
                                Foreground="#E0E0E0" VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1" Width="180"
                              Text="{Binding Value, UpdateSourceTrigger=LostFocus}"
-                             VerticalAlignment="Center"/>
+                             VerticalAlignment="Center"
+                             KeyDown="SettingTextBox_KeyDown"/>
                 </Grid>
             </Border>
         </DataTemplate>

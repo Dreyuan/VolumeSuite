@@ -46,6 +46,7 @@ public class SettingsItem
     public double? Max { get; set; }
     public double? Step { get; set; }
     public int? Decimals { get; set; }
+    public double? Curve { get; set; }
     public string? Mode { get; set; }
     public string? Source { get; set; }   // ★ dropdown 的候选来源
     public List<DropdownOption>? StaticOptions { get; set; }

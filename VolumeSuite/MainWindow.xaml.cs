@@ -225,6 +225,20 @@ public partial class MainWindow : Window
                 pvm.Value = dialog.FileName;
         }
     }
+    // ============ 滑条拖动：开始/结束 ============
+
+    private void NumberSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Slider s && s.DataContext is NumberItemViewModel vm)
+            vm.BeginDrag();
+    }
+
+    private void NumberSlider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Slider s && s.DataContext is NumberItemViewModel vm)
+            vm.EndDrag();
+    }
+
 
     // ============ 背景：根据启动器设置应用 ============
 
@@ -382,5 +396,21 @@ public partial class MainWindow : Window
         if (ls.Store.GetString("BackgroundMode", "image") != "acrylic") return;
 
         AcrylicHelper.EnableAcrylic(this, 0x00000000);
+    }
+    // ============ 所有设置项的输入框：回车 = 立即提交 ============
+
+    private void SettingTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is not TextBox tb) return;
+
+        // 强制把绑定更新回 ViewModel（跟"点空白"效果相同）
+        tb.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+
+        // 让焦点离开，视觉上有个"提交了"的反馈（光标还在框里但内容已经生效）
+        var request = new TraversalRequest(FocusNavigationDirection.Next);
+        tb.MoveFocus(request);
+
+        e.Handled = true;
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -57,11 +58,28 @@ public partial class BoolItemViewModel : SettingsItemViewModel
 public partial class NumberItemViewModel : SettingsItemViewModel
 {
     [ObservableProperty] private double _value;
+    [ObservableProperty] private double _position;
+
+    private bool _isDragging;
+    private bool _suppressSync;
 
     public double Min { get; }
     public double Max { get; }
     public double Step { get; }
     public int Decimals { get; }
+    public double Curve { get; }
+
+    public string Text
+    {
+        get => Value.ToString("F" + Decimals);
+        set
+        {
+            if (double.TryParse(value, out var v))
+                Value = Math.Clamp(v, Min, Max);
+            else
+                OnPropertyChanged();
+        }
+    }
 
     public NumberItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
     {
@@ -70,11 +88,58 @@ public partial class NumberItemViewModel : SettingsItemViewModel
         Max = schema.Max ?? 100;
         Step = schema.Step ?? 1;
         Decimals = schema.Decimals ?? 0;
+        Curve = schema.Curve ?? 1.0;
+        _position = ValueToPosition(_value);
     }
 
     partial void OnValueChanged(double value)
     {
+        OnPropertyChanged(nameof(Text));
+
+        if (!_suppressSync)
+        {
+            _suppressSync = true;
+            Position = ValueToPosition(value);
+            _suppressSync = false;
+        }
+
+        if (_isDragging) return;
         Owner.Store.SetDouble(Key, value);
+        Persist();
+    }
+
+    partial void OnPositionChanged(double value)
+    {
+        if (_suppressSync) return;
+        _suppressSync = true;
+        Value = PositionToValue(value);
+        _suppressSync = false;
+    }
+
+    private double ValueToPosition(double v)
+    {
+        if (Max <= Min) return 0;
+        var t = (v - Min) / (Max - Min);
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+        return Curve == 1.0 ? t : Math.Pow(t, 1.0 / Curve);
+    }
+
+    private double PositionToValue(double p)
+    {
+        if (p < 0) p = 0;
+        if (p > 1) p = 1;
+        var t = Curve == 1.0 ? p : Math.Pow(p, Curve);
+        return Min + (Max - Min) * t;
+    }
+
+    public void BeginDrag() => _isDragging = true;
+
+    public void EndDrag()
+    {
+        if (!_isDragging) return;
+        _isDragging = false;
+        Owner.Store.SetDouble(Key, Value);
         Persist();
     }
 }
@@ -143,7 +208,6 @@ public partial class PathItemViewModel : SettingsItemViewModel
 {
     [ObservableProperty] private string _value = "";
 
-    /// <summary>"file" 或 "folder"</summary>
     public string Mode { get; }
 
     public PathItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
@@ -176,7 +240,6 @@ public partial class DropdownItemViewModel : SettingsItemViewModel
 
         _currentValue = owner.Store.GetString(schema.Key);
 
-        // 如果 schema 提供了静态选项，直接用，不走命令行
         if (schema.StaticOptions != null && schema.StaticOptions.Count > 0)
         {
             foreach (var opt in schema.StaticOptions)
