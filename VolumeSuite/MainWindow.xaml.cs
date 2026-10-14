@@ -11,7 +11,7 @@ using VolumeSuite.ViewModels;
 using WpfUi = Wpf.Ui.Controls;   // ← 报错说这个命名空间不存在
 namespace VolumeSuite;
 
-public partial class MainWindow : WpfUi.FluentWindow
+public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
     private HotkeyItemViewModel? _capturingHotkey;
@@ -248,9 +248,12 @@ public partial class MainWindow : WpfUi.FluentWindow
 
             // 色调层
             // 色调层（诊断：暂时隐藏）
+            // 色调层
             if (BackgroundShade != null)
             {
-                BackgroundShade.Visibility = Visibility.Collapsed;
+                BackgroundShade.Visibility = Visibility.Visible;
+                BackgroundShade.Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x33, 0x00, 0x00, 0x00));
             }
 
             if (AppTitleBar != null)
