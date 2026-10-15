@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using VolumeSuite.Services;
 using VolumeSuite.ViewModels;
-using WpfUi = Wpf.Ui.Controls;   // ← 报错说这个命名空间不存在
+
 namespace VolumeSuite;
 
 public partial class MainWindow : Window
@@ -27,7 +28,17 @@ public partial class MainWindow : Window
 
         ViewModel.LauncherSettings.SettingsChanged += ApplyBackground;
 
-        // ★ 关键：延迟到 Loaded，此时 WPF-UI 已经初始化完，不会被覆盖
+        // 启动器设置里任意一项变化时，重新应用背景
+        SettingsItemViewModel.AnySettingsChanged += (key) =>
+        {
+            if (ViewModel?.SelectedTool != ViewModel?.LauncherSettings) return;
+
+            // ★ 如果改的是 8 位 HEX 色调，同步 alpha 到滑条
+            SyncTintOpacityFromHex(key);
+
+            ApplyBackground();
+        };
+
         Loaded += (_, _) =>
         {
             var source = System.Windows.Interop.HwndSource.FromHwnd(
@@ -39,21 +50,50 @@ public partial class MainWindow : Window
             ApplyBackground();
             source?.AddHook(WndProc);
         };
-        // 窗口每次重新激活（比如下拉框关闭、切回本窗口）时，
-        // 强制重新应用一次毛玻璃——防止 WPF-UI 抢在前面覆盖掉
+
         Activated += (_, _) =>
         {
             var ls = ViewModel?.LauncherSettings;
             if (ls == null) return;
 
-            if (ls.Store.GetString("BackgroundMode", "image") == "acrylic")
-                AcrylicHelper.EnableAcrylic(this, 0x00000000);
+            if (WindowState == WindowState.Normal)
+                ApplyBackground();
+        };
+
+        // ★ 最小化/恢复时控制缩略图是否图标化
+        StateChanged += (_, _) =>
+        {
+            var ls = ViewModel?.LauncherSettings;
+            if (ls == null) return;
+            bool isAcrylic = ls.Store.GetString("BackgroundMode", "image") == "acrylic";
+
+            if (WindowState == WindowState.Minimized)
+            {
+                if (isAcrylic)
+                {
+                    // 延迟 300ms 再图标化，让最小化动画用真实缩略图
+                    var timer = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(300)
+                    };
+                    timer.Tick += (_, _) =>
+                    {
+                        timer.Stop();
+                        SetIconicThumbnail(true);
+                    };
+                    timer.Start();
+                }
+                // 图片模式：不图标化，让 DWM 用正常缩略图
+            }
+            else
+            {
+                // 恢复：取消图标化
+                SetIconicThumbnail(false);
+            }
         };
     }
 
-    /// <summary>
-    /// 点 X 时只隐藏窗口，不真的关闭。
-    /// </summary>
+    /// <summary>点 X 时只隐藏窗口，不真的关闭。</summary>
     protected override void OnClosing(CancelEventArgs e)
     {
         e.Cancel = true;
@@ -119,9 +159,7 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>
-    /// 左下角"启动器设置"按钮
-    /// </summary>
+    /// <summary>左下角"启动器设置"按钮</summary>
     private void LauncherSettings_Click(object sender, MouseButtonEventArgs e)
     {
         ViewModel.SelectedTool = ViewModel.LauncherSettings;
@@ -225,6 +263,7 @@ public partial class MainWindow : Window
                 pvm.Value = dialog.FileName;
         }
     }
+
     // ============ 滑条拖动：开始/结束 ============
 
     private void NumberSlider_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -239,7 +278,6 @@ public partial class MainWindow : Window
             vm.EndDrag();
     }
 
-
     // ============ 背景：根据启动器设置应用 ============
 
     private void ApplyBackground()
@@ -250,29 +288,46 @@ public partial class MainWindow : Window
         var mode = store.GetString("BackgroundMode", "image");
         var path = store.GetString("BackgroundImagePath", "");
 
+        // ===== 标题栏色调 =====
+        var titleBarMode = store.GetString("TitleBarTint", "follow");
+        System.Windows.Media.Brush titleBarBrush = titleBarMode switch
+        {
+            "half" => new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromArgb(0x66, 0, 0, 0)),
+            "solid" => new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromRgb(0x1A, 0x1A, 0x1A)),
+            _ => System.Windows.Media.Brushes.Transparent,   // "follow"
+        };
+        if (titleBarBrush.CanFreeze) titleBarBrush.Freeze();
+
         if (mode == "acrylic")
         {
-            // ===== 毛玻璃模式 =====
-            // 隐藏不透明底和图片，让 DWM 模糊透出来
+            // ===== 毛玻璃 =====
             if (OpaqueUnderlay != null)
                 OpaqueUnderlay.Visibility = Visibility.Collapsed;
 
             if (BackgroundImage != null)
                 BackgroundImage.Visibility = Visibility.Collapsed;
 
-            // 色调层
-            // 色调层（诊断：暂时隐藏）
-            // 色调层
+            // 读毛玻璃色调
+            var tintHex = store.GetString("AcrylicTintColor", "#000000");
+            var tintOpacity = store.GetDouble("AcrylicTintOpacity", 20);
+            if (tintOpacity < 0) tintOpacity = 20;
+
+            var baseColor = ParseHexColor(tintHex, System.Windows.Media.Colors.Black);
+            byte alpha = (byte)Math.Clamp(tintOpacity * 255.0 / 100.0, 0, 255);
+            var tintBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
+            tintBrush.Freeze();
+
             if (BackgroundShade != null)
             {
                 BackgroundShade.Visibility = Visibility.Visible;
-                BackgroundShade.Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(0x33, 0x00, 0x00, 0x00));
+                BackgroundShade.Background = tintBrush;
             }
 
             if (AppTitleBar != null)
-                AppTitleBar.Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(0x66, 0x00, 0x00, 0x00));
+                AppTitleBar.Background = titleBarBrush;
 
             AcrylicHelper.EnableAcrylic(this, 0x00000000);
             return;
@@ -281,22 +336,42 @@ public partial class MainWindow : Window
         // ===== 图片模式 =====
         AcrylicHelper.DisableAcrylic(this);
 
-        // 显示不透明底，遮住 DWM 的模糊
         if (OpaqueUnderlay != null)
             OpaqueUnderlay.Visibility = Visibility.Visible;
 
         if (BackgroundImage != null)
+        {
             BackgroundImage.Visibility = Visibility.Visible;
+
+            // 图片不透明度
+            var imgOpacity = store.GetDouble("ImageOpacity", 40);
+            if (imgOpacity < 0) imgOpacity = 40;
+            BackgroundImage.Opacity = Math.Clamp(imgOpacity / 100.0, 0, 1);
+
+            // 图片模糊
+            var blurRadius = store.GetDouble("ImageBlurRadius", 0);
+            if (blurRadius <= 0)
+                BackgroundImage.Effect = null;
+            else
+                BackgroundImage.Effect = new System.Windows.Media.Effects.BlurEffect
+                {
+                    Radius = blurRadius,
+                    KernelType = System.Windows.Media.Effects.KernelType.Gaussian,
+                };
+        }
 
         if (BackgroundShade != null)
         {
+            var shadeDepth = store.GetDouble("ImageShadeDepth", 60);
+            if (shadeDepth < 0) shadeDepth = 60;
+            byte shadeAlpha = (byte)Math.Clamp(shadeDepth * 255.0 / 100.0, 0, 255);
             BackgroundShade.Visibility = Visibility.Visible;
             BackgroundShade.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromArgb(0x99, 0x00, 0x00, 0x00));
+                System.Windows.Media.Color.FromArgb(shadeAlpha, 0, 0, 0));
         }
 
         if (AppTitleBar != null)
-            AppTitleBar.Background = System.Windows.Media.Brushes.Transparent;
+            AppTitleBar.Background = titleBarBrush;
 
         BitmapImage? bmp = null;
         if (!string.IsNullOrEmpty(path) && File.Exists(path))
@@ -308,12 +383,41 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 解析 HEX 颜色，支持 #RRGGBB、#AARRGGBB、RRGGBB（不带 #）。
+    /// 解析失败返回 fallback。
+    /// </summary>
+    private static System.Windows.Media.Color ParseHexColor(
+        string hex, System.Windows.Media.Color fallback)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return fallback;
+        hex = hex.Trim().TrimStart('#');
+        try
+        {
+            if (hex.Length == 6)
+            {
+                byte r = Convert.ToByte(hex.Substring(0, 2), 16);
+                byte g = Convert.ToByte(hex.Substring(2, 2), 16);
+                byte b = Convert.ToByte(hex.Substring(4, 2), 16);
+                return System.Windows.Media.Color.FromRgb(r, g, b);
+            }
+            if (hex.Length == 8)
+            {
+                byte a = Convert.ToByte(hex.Substring(0, 2), 16);
+                byte r = Convert.ToByte(hex.Substring(2, 2), 16);
+                byte g = Convert.ToByte(hex.Substring(4, 2), 16);
+                byte b = Convert.ToByte(hex.Substring(6, 2), 16);
+                return System.Windows.Media.Color.FromArgb(a, r, g, b);
+            }
+        }
+        catch { }
+        return fallback;
+    }
+
+    /// <summary>
     /// 加载图片，兼容带 EXIF/ICC 元数据的"问题图片"。
-    /// 先用 WPF 直接加载，失败则用 GDI+ 转码剥离元数据后重试。
     /// </summary>
     private static BitmapImage? LoadBitmapFromFile(string path)
     {
-        // 快路径：直接 WPF 加载
         try
         {
             var bmp = new BitmapImage();
@@ -325,12 +429,8 @@ public partial class MainWindow : Window
             bmp.Freeze();
             return bmp;
         }
-        catch
-        {
-            // 落到慢路径
-        }
+        catch { }
 
-        // 慢路径：GDI+ 解码 + 重新编码为 PNG，剥离元数据
         try
         {
             using var src = System.Drawing.Image.FromFile(path);
@@ -353,9 +453,7 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// 从 pack:// 资源路径加载 BitmapImage
-    /// </summary>
+    /// <summary>从 pack:// 资源路径加载 BitmapImage</summary>
     private static BitmapImage? LoadBitmapFromResource(string uri)
     {
         try
@@ -373,6 +471,7 @@ public partial class MainWindow : Window
             return null;
         }
     }
+
     // ============ 拦截窗口激活消息，抢占式重设模糊 ============
 
     private const int WM_NCACTIVATE = 0x0086;
@@ -381,7 +480,6 @@ public partial class MainWindow : Window
     {
         if (msg == WM_NCACTIVATE)
         {
-            // 用最低优先级排队，保证在 WPF-UI 处理完之后再执行
             Dispatcher.BeginInvoke(
                 new Action(ReapplyAcrylicIfNeeded),
                 System.Windows.Threading.DispatcherPriority.ApplicationIdle);
@@ -397,6 +495,28 @@ public partial class MainWindow : Window
 
         AcrylicHelper.EnableAcrylic(this, 0x00000000);
     }
+
+    // ============ 任务栏缩略图：强制显示图标 ============
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private const int DWMWA_FORCE_ICONIC_REPRESENTATION = 7;
+
+    private void SetIconicThumbnail(bool iconic)
+    {
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+            int value = iconic ? 1 : 0;
+            DwmSetWindowAttribute(hwnd, DWMWA_FORCE_ICONIC_REPRESENTATION,
+                ref value, sizeof(int));
+        }
+        catch { }
+    }
+
     // ============ 所有设置项的输入框：回车 = 立即提交 ============
 
     private void SettingTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -404,12 +524,46 @@ public partial class MainWindow : Window
         if (e.Key != Key.Enter) return;
         if (sender is not TextBox tb) return;
 
-        // 强制把绑定更新回 ViewModel（跟"点空白"效果相同）
         tb.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
-
-        // 释放键盘焦点 —— 等于"点击空白"，光标消失、无选中框
         Keyboard.ClearFocus();
 
         e.Handled = true;
+    }
+
+    // ============ 8 位 HEX 色调 → 同步滑条 alpha ============
+
+    private bool _syncingTint;
+
+    private void SyncTintOpacityFromHex(string changedKey)
+    {
+        if (_syncingTint) return;
+        if (changedKey != "AcrylicTintColor") return;
+
+        var ls = ViewModel?.LauncherSettings;
+        if (ls == null) return;
+
+        var hex = ls.Store.GetString("AcrylicTintColor", "");
+        var clean = hex.Trim().TrimStart('#');
+        if (clean.Length != 8) return;   // 只有 8 位才同步
+
+        byte alpha;
+        try { alpha = Convert.ToByte(clean.Substring(0, 2), 16); }
+        catch { return; }
+
+        double opacity = Math.Round(alpha * 100.0 / 255.0);
+
+        // 找到 AcrylicTintOpacity 的 VM，把 alpha 写进去
+        _syncingTint = true;
+        try
+        {
+            foreach (var section in ls.Sections)
+                foreach (var item in section.Items)
+                    if (item is NumberItemViewModel nvm && nvm.Key == "AcrylicTintOpacity")
+                        nvm.Value = opacity;
+        }
+        finally
+        {
+            _syncingTint = false;
+        }
     }
 }

@@ -23,7 +23,20 @@ public abstract partial class SettingsItemViewModel : ObservableObject
         Owner = owner;
     }
 
-    protected void Persist() => Owner.SaveSettings();
+    public static event System.Action<string>? AnySettingsChanged;
+
+    /// <summary>保存到磁盘 + 通知</summary>
+    protected void Persist()
+    {
+        Owner.SaveSettings();
+        AnySettingsChanged?.Invoke(Key);
+    }
+
+    /// <summary>只通知，不落盘（拖动中用）</summary>
+    protected void NotifyOnly()
+    {
+        AnySettingsChanged?.Invoke(Key);
+    }
 
     public static SettingsItemViewModel Create(SettingsItem schema, ToolViewModel owner)
     {
@@ -83,12 +96,18 @@ public partial class NumberItemViewModel : SettingsItemViewModel
 
     public NumberItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
     {
-        _value = owner.Store.GetDouble(schema.Key);
         Min = schema.Min ?? 0;
         Max = schema.Max ?? 100;
         Step = schema.Step ?? 1;
         Decimals = schema.Decimals ?? 0;
         Curve = schema.Curve ?? 1.0;
+
+        // ★ 如果 store 里没这个 key，先写内存（不落盘），保证 UI 和 ApplyBackground 看到同一个值
+        double def = schema.Default ?? Min;
+        if (!owner.Store.HasKey(schema.Key))
+            owner.Store.SetDouble(schema.Key, def);
+
+        _value = owner.Store.GetDouble(schema.Key, def);
         _position = ValueToPosition(_value);
     }
 
@@ -103,9 +122,15 @@ public partial class NumberItemViewModel : SettingsItemViewModel
             _suppressSync = false;
         }
 
-        if (_isDragging) return;
-        Owner.Store.SetDouble(Key, value);
-        Persist();
+        Owner.Store.SetDouble(Key, value);   // ★ 内存永远实时更新
+
+        if (_isDragging)
+        {
+            NotifyOnly();                     // ★ 拖动中：通知但不落盘
+            return;
+        }
+
+        Persist();                            // 松手 / 输入框改：落盘
     }
 
     partial void OnPositionChanged(double value)
@@ -148,15 +173,50 @@ public partial class TextItemViewModel : SettingsItemViewModel
 {
     [ObservableProperty] private string _value = "";
 
+    private readonly string _mode;
+
+    /// <summary>供 TextBox 绑定——setter 里做校验，非法输入不写盘</summary>
+    public string Text
+    {
+        get => Value;
+        set
+        {
+            if (!IsAcceptable(value))
+            {
+                OnPropertyChanged();   // 触发 UI 回滚到原值
+                return;
+            }
+            Value = value ?? "";
+        }
+    }
+
     public TextItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
     {
         _value = owner.Store.GetString(schema.Key);
+        _mode = schema.Mode ?? "";
     }
 
     partial void OnValueChanged(string value)
     {
+        OnPropertyChanged(nameof(Text));
         Owner.Store.SetString(Key, value ?? "");
         Persist();
+    }
+
+    private bool IsAcceptable(string? s)
+    {
+        if (_mode == "hex") return IsValidHex(s);
+        return true;
+    }
+
+    private static bool IsValidHex(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        s = s.Trim().TrimStart('#');
+        if (s.Length != 6 && s.Length != 8) return false;
+        foreach (var c in s)
+            if (!Uri.IsHexDigit(c)) return false;
+        return true;
     }
 }
 
@@ -238,7 +298,19 @@ public partial class DropdownItemViewModel : SettingsItemViewModel
         _source = schema.Source ?? "";
         _exePath = owner.Manifest.ExePath;
 
-        _currentValue = owner.Store.GetString(schema.Key);
+        // 如果没有存储值，用第一个 StaticOptions 的 Id 作为默认
+        if (owner.Store.HasKey(schema.Key))
+        {
+            _currentValue = owner.Store.GetString(schema.Key);
+        }
+        else if (schema.StaticOptions != null && schema.StaticOptions.Count > 0)
+        {
+            _currentValue = schema.StaticOptions[0].Id;
+        }
+        else
+        {
+            _currentValue = "";
+        }
 
         if (schema.StaticOptions != null && schema.StaticOptions.Count > 0)
         {

@@ -34,7 +34,19 @@ public static class LauncherManifest
                                 StaticOptions = new List<DropdownOption>
                                 {
                                     new() { Id = "image",   Name = "图片背景" },
-                                    new() { Id = "acrylic", Name = "毛玻璃（实验性）" },
+                                    new() { Id = "acrylic", Name = "毛玻璃" },
+                                }
+                            },
+                            new()
+                            {
+                                Key = "TitleBarTint",
+                                Label = "标题栏色调",
+                                Type = "dropdown",
+                                StaticOptions = new List<DropdownOption>
+                                {
+                                    new() { Id = "follow", Name = "跟随背景" },
+                                    new() { Id = "half",   Name = "半透明黑" },
+                                    new() { Id = "solid",  Name = "不透明黑" },
                                 }
                             },
                             new()
@@ -43,6 +55,57 @@ public static class LauncherManifest
                                 Label = "背景图片",
                                 Type = "path",
                                 Mode = "file",
+                            },
+                            new()
+                            {
+                                Key = "AcrylicTintColor",
+                                Label = "毛玻璃色调 (HEX)",
+                                Type = "text",
+                                Mode = "hex",
+                            },
+                            new()
+                            {
+                                Key = "AcrylicTintOpacity",
+                                Label = "毛玻璃色调深度 (%)",
+                                Type = "number",
+                                Min = 0,
+                                Max = 100,
+                                Step = 1,
+                                Decimals = 0,
+                                Default = 20,
+                            },
+                            new()
+                            {
+                                Key = "ImageOpacity",
+                                Label = "图片不透明度 (%)",
+                                Type = "number",
+                                Min = 0,
+                                Max = 100,
+                                Step = 1,
+                                Decimals = 0,
+                                Default = 40,
+                            },
+                            new()
+                            {
+                                Key = "ImageBlurRadius",
+                                Label = "图片模糊半径",
+                                Type = "number",
+                                Min = 0,
+                                Max = 30,
+                                Step = 1,
+                                Decimals = 0,
+                                Default = 0,
+                            },
+                            new()
+                            {
+                                Key = "ImageShadeDepth",
+                                Label = "图片遮罩深度 (%)",
+                                Type = "number",
+                                Min = 0,
+                                Max = 100,
+                                Step = 1,
+                                Decimals = 0,
+                                Default = 60,
                             },
                         }
                     }

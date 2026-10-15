@@ -22,6 +22,8 @@ public class SettingsStore
         Load();
     }
 
+    public bool HasKey(string key) => _data.ContainsKey(key);
+
     public void Load()
     {
         try
