@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using VolumeSuite.Services;
 using VolumeSuite.ViewModels;
+using static VolumeSuite.ViewModels.DropdownItemViewModel;
 
 namespace VolumeSuite;
 
@@ -48,20 +49,11 @@ public partial class MainWindow : Window
                     System.Windows.Media.Colors.Transparent;
 
             ApplyBackground();
-            source?.AddHook(WndProc);
-        };
-
-        Activated += (_, _) =>
-        {
-            var ls = ViewModel?.LauncherSettings;
-            if (ls == null) return;
-
-            if (WindowState == WindowState.Normal)
-                ApplyBackground();
         };
 
         // ★ 最小化/恢复时控制缩略图是否图标化
-        StateChanged += (_, _) =>
+        /*
+         StateChanged += (_, _) =>
         {
             var ls = ViewModel?.LauncherSettings;
             if (ls == null) return;
@@ -87,10 +79,14 @@ public partial class MainWindow : Window
             }
             else
             {
-                // 恢复：取消图标化
+                // 恢复：立即重设模糊，让动画期间就有模糊
+                if (isAcrylic)
+                    AcrylicHelper.EnableAcrylic(this, 0x00000000);
+
                 SetIconicThumbnail(false);
             }
         };
+        */
     }
 
     /// <summary>点 X 时只隐藏窗口，不真的关闭。</summary>
@@ -261,6 +257,45 @@ public partial class MainWindow : Window
             };
             if (dialog.ShowDialog() == true)
                 pvm.Value = dialog.FileName;
+        }
+    }
+
+    // ============ 颜色项：展开/收起 ============
+
+    private void ColorExpand_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is ColorItemViewModel vm)
+            vm.IsExpanded = !vm.IsExpanded;
+    }
+
+    // ============ 颜色选择器：常用色板 / 收藏夹 ============
+
+    private void CommonColor_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is ColorSlot slot && slot.Parent != null)
+            slot.Parent.ApplyHex(slot.Hex);
+    }
+
+    private void SavedColor_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is ColorSlot slot && slot.Parent != null)
+        {
+            if (slot.IsEmpty)
+                slot.Parent.SaveCurrentToSlot(slot.Index);
+            else
+                slot.Parent.ApplyHex(slot.Hex);
+        }
+    }
+
+    private void SavedColor_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.DataContext is ColorSlot slot && slot.Parent != null)
+        {
+            if (!slot.IsEmpty)
+            {
+                slot.Parent.ClearSlot(slot.Index);
+                e.Handled = true;
+            }
         }
     }
 
@@ -470,30 +505,6 @@ public partial class MainWindow : Window
         {
             return null;
         }
-    }
-
-    // ============ 拦截窗口激活消息，抢占式重设模糊 ============
-
-    private const int WM_NCACTIVATE = 0x0086;
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WM_NCACTIVATE)
-        {
-            Dispatcher.BeginInvoke(
-                new Action(ReapplyAcrylicIfNeeded),
-                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-        }
-        return IntPtr.Zero;
-    }
-
-    private void ReapplyAcrylicIfNeeded()
-    {
-        var ls = ViewModel?.LauncherSettings;
-        if (ls == null) return;
-        if (ls.Store.GetString("BackgroundMode", "image") != "acrylic") return;
-
-        AcrylicHelper.EnableAcrylic(this, 0x00000000);
     }
 
     // ============ 任务栏缩略图：强制显示图标 ============

@@ -106,4 +106,28 @@ public class SettingsStore
         foreach (var k in keys) arr.Add(k);
         _data[key] = arr;
     }
+    public List<string> GetStringList(string key)
+    {
+        var result = new List<string>();
+        try
+        {
+            if (_data[key] is JsonArray arr)
+            {
+                foreach (var node in arr)
+                {
+                    string? s = node?.GetValue<string>();
+                    result.Add(s ?? "");
+                }
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    public void SetStringList(string key, IEnumerable<string> values)
+    {
+        var arr = new JsonArray();
+        foreach (var v in values) arr.Add(v ?? "");
+        _data[key] = arr;
+    }
 }

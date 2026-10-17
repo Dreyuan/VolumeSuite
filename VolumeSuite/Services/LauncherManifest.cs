@@ -59,9 +59,8 @@ public static class LauncherManifest
                             new()
                             {
                                 Key = "AcrylicTintColor",
-                                Label = "毛玻璃色调 (HEX)",
-                                Type = "text",
-                                Mode = "hex",
+                                Label = "毛玻璃色调",
+                                Type = "color",
                             },
                             new()
                             {

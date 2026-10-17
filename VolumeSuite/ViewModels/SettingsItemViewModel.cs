@@ -1,10 +1,12 @@
-﻿using System;
+﻿using ColorPicker.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.Xml.Linq;
 using VolumeSuite.Models;
 using VolumeSuite.Services;
 
@@ -47,6 +49,7 @@ public abstract partial class SettingsItemViewModel : ObservableObject
             "hotkey" => new HotkeyItemViewModel(schema, owner),
             "path" => new PathItemViewModel(schema, owner),
             "dropdown" => new DropdownItemViewModel(schema, owner),
+            "color" => new ColorItemViewModel(schema, owner),
             _ => new TextItemViewModel(schema, owner),
         };
     }
@@ -353,5 +356,177 @@ public partial class DropdownItemViewModel : SettingsItemViewModel
     {
         Owner.Store.SetString(Key, value ?? "");
         Persist();
+    }
+}
+
+public partial class ColorSlot : ObservableObject
+{
+    [ObservableProperty] private string _hex = "";
+    [ObservableProperty] private System.Windows.Media.Brush? _brush;
+
+    public int Index { get; set; }
+    public ColorItemViewModel? Parent { get; set; }
+
+    public bool IsEmpty => string.IsNullOrEmpty(Hex);
+    public bool IsFilled => !IsEmpty;
+
+    partial void OnHexChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(IsFilled));
+
+        if (!string.IsNullOrEmpty(value))
+        {
+            try
+            {
+                var c = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(value);
+                var b = new System.Windows.Media.SolidColorBrush(c);
+                b.Freeze();
+                Brush = b;
+            }
+            catch { Brush = null; }
+        }
+        else
+        {
+            Brush = null;
+        }
+    }
+}
+public partial class ColorItemViewModel : SettingsItemViewModel
+{
+    private System.Windows.Media.Color _value;
+    private bool _isExpanded;
+
+    private static readonly string[] DefaultCommonColors = new[]
+    {
+        "#000000", "#FFFFFF", "#5B8DEF", "#FF5555",
+        "#FFAA00", "#FFEB3B", "#4CAF50", "#00BCD4",
+        "#9C27B0", "#E91E63", "#795548", "#607D8B"
+    };
+
+    public System.Collections.ObjectModel.ObservableCollection<ColorSlot> CommonColors { get; } = new();
+    public System.Collections.ObjectModel.ObservableCollection<ColorSlot> SavedColors { get; } = new();
+
+    public System.Windows.Media.Color Value
+    {
+        get => _value;
+        set
+        {
+            if (_value == value) return;
+            _value = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HexText));
+            OnPropertyChanged(nameof(ValueAsBrush));
+            OnPropertyChanged(nameof(RgbText));
+
+            Owner.Store.SetString(Key, HexText);
+            Persist();
+        }
+    }
+
+    public System.Windows.Media.Brush ValueAsBrush
+    {
+        get
+        {
+            var b = new System.Windows.Media.SolidColorBrush(Value);
+            b.Freeze();
+            return b;
+        }
+    }
+
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set { _isExpanded = value; OnPropertyChanged(); }
+    }
+
+    public string HexText
+    {
+        get => $"#{Value.R:X2}{Value.G:X2}{Value.B:X2}";
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value)) { OnPropertyChanged(); return; }
+            var s = value.Trim().TrimStart('#');
+            if (s.Length != 6 && s.Length != 8) { OnPropertyChanged(); return; }
+            try
+            {
+                int offset = s.Length == 8 ? 2 : 0;
+                byte r = Convert.ToByte(s.Substring(offset + 0, 2), 16);
+                byte g = Convert.ToByte(s.Substring(offset + 2, 2), 16);
+                byte b = Convert.ToByte(s.Substring(offset + 4, 2), 16);
+                Value = System.Windows.Media.Color.FromRgb(r, g, b);
+            }
+            catch { OnPropertyChanged(); }
+        }
+    }
+
+    public string RgbText => $"{Value.R}, {Value.G}, {Value.B}";
+
+    public ColorItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
+    {
+        var hex = owner.Store.GetString(schema.Key, "#000000");
+        _value = ParseHexToColor(hex);
+
+        // 常用色板
+        foreach (var h in DefaultCommonColors)
+            CommonColors.Add(new ColorSlot { Hex = h, Parent = this });
+
+        // 收藏夹
+        var saved = owner.Store.GetStringList("SavedColors");
+        while (saved.Count < 12) saved.Add("");
+        for (int i = 0; i < 12; i++)
+            SavedColors.Add(new ColorSlot { Hex = saved[i], Parent = this, Index = i });
+    }
+
+    public void ApplyHex(string hex)
+    {
+        HexText = hex;
+    }
+
+    public void SaveCurrentToSlot(int index)
+    {
+        if (index < 0 || index >= SavedColors.Count) return;
+        SavedColors[index].Hex = HexText;
+        PersistSaved();
+    }
+
+    public void ClearSlot(int index)
+    {
+        if (index < 0 || index >= SavedColors.Count) return;
+        SavedColors[index].Hex = "";
+        PersistSaved();
+    }
+
+    private void PersistSaved()
+    {
+        var list = new System.Collections.Generic.List<string>();
+        foreach (var s in SavedColors) list.Add(s.Hex ?? "");
+        Owner.Store.SetStringList("SavedColors", list);
+        Owner.SaveSettings();
+    }
+
+    private static System.Windows.Media.Color ParseHexToColor(string hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return System.Windows.Media.Colors.Black;
+        var s = hex.Trim().TrimStart('#');
+        try
+        {
+            if (s.Length == 6)
+            {
+                return System.Windows.Media.Color.FromRgb(
+                    Convert.ToByte(s.Substring(0, 2), 16),
+                    Convert.ToByte(s.Substring(2, 2), 16),
+                    Convert.ToByte(s.Substring(4, 2), 16));
+            }
+            if (s.Length == 8)
+            {
+                return System.Windows.Media.Color.FromRgb(
+                    Convert.ToByte(s.Substring(2, 2), 16),
+                    Convert.ToByte(s.Substring(4, 2), 16),
+                    Convert.ToByte(s.Substring(6, 2), 16));
+            }
+        }
+        catch { }
+        return System.Windows.Media.Colors.Black;
     }
 }
