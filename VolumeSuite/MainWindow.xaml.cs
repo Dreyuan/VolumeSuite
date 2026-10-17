@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using VolumeSuite.Services;
 using VolumeSuite.ViewModels;
@@ -18,6 +20,8 @@ public partial class MainWindow : Window
     public MainViewModel ViewModel { get; }
     private HotkeyItemViewModel? _capturingHotkey;
     private readonly List<string> _captureKeys = new();
+    private System.Windows.Threading.DispatcherTimer? _windowSaveTimer;
+    private bool _isRestoringWindow = false; // 防止恢复时误触发保存
 
     public MainWindow()
     {
@@ -34,6 +38,11 @@ public partial class MainWindow : Window
 
         // AnySettingsChanged 里
         ApplyWindowCorner(_lastStraightCorner);
+
+        // 监听窗口位置、大小、状态变化
+        LocationChanged += (_, _) => TriggerSaveWindowPlacement();
+        SizeChanged += (_, _) => TriggerSaveWindowPlacement();
+        StateChanged += (_, _) => TriggerSaveWindowPlacement();
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         InitColorPickerHooks();  // ★ 初始化吸色钩子
@@ -57,6 +66,13 @@ public partial class MainWindow : Window
             ApplyWindowCorner();
         };
 
+        // 监听选中的工具变化，触发动画
+        ViewModel.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.SelectedTool))
+                AnimateToolChange();
+        };
+
         Loaded += (_, _) =>
         {
             var source = System.Windows.Interop.HwndSource.FromHwnd(
@@ -67,6 +83,7 @@ public partial class MainWindow : Window
 
             ApplyBackground();
             ApplyWindowCorner();
+            RestoreWindowPlacement();
 
             VolumeSuite.Services.GlobalInputHook.Start(); // ★ 启动全局钩子
         };
@@ -165,7 +182,8 @@ public partial class MainWindow : Window
     /// <summary>点 X 时只隐藏窗口，不真的关闭。</summary>
     protected override void OnClosing(CancelEventArgs e)
     {
-        VolumeSuite.Services.GlobalInputHook.Stop(); // ★ 关闭时释放钩子
+        VolumeSuite.Services.GlobalInputHook.Stop();
+        SaveWindowPlacement(); // ★ 退出前保存一次
         e.Cancel = true;
         Hide();
     }
@@ -291,7 +309,6 @@ public partial class MainWindow : Window
         _capturingHotkey = null;
         _captureKeys.Clear();
     }
-    private bool _isCornerStraight = false;
 
     private void InitCornerHooks()
     {
@@ -752,5 +769,166 @@ public partial class MainWindow : Window
         }
 
         SetWindowRgn(hwnd, hRgn, true);
+    }
+    // ============ 窗口位置/大小记忆 ============
+
+    private void RestoreWindowPlacement()
+    {
+        var ls = ViewModel?.LauncherSettings;
+        if (ls == null) return;
+
+        _isRestoringWindow = true;
+        try
+        {
+            double w = ls.Store.GetDouble("WindowWidth", 0);
+            double h = ls.Store.GetDouble("WindowHeight", 0);
+            double x = ls.Store.GetDouble("WindowLeft", -99999);
+            double y = ls.Store.GetDouble("WindowTop", -99999);
+            bool isMax = ls.Store.GetBool("WindowMaximized", false);
+
+            if (w >= MinWidth && h >= MinHeight)
+            {
+                Width = w;
+                Height = h;
+            }
+
+            // 检查位置是否在当前所有屏幕的范围内（防拔掉副屏导致窗口飞走）
+            bool isPositionValid = false;
+            if (x != -99999 && y != -99999)
+            {
+                var virtualScreen = new Rect(
+                    SystemParameters.VirtualScreenLeft,
+                    SystemParameters.VirtualScreenTop,
+                    SystemParameters.VirtualScreenWidth,
+                    SystemParameters.VirtualScreenHeight);
+
+                // 只要窗口的标题栏有一半在屏幕内，就认为合法
+                if (virtualScreen.Contains(x + (Width / 2), y + 15))
+                {
+                    isPositionValid = true;
+                }
+            }
+
+            if (isPositionValid)
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = x;
+                Top = y;
+            }
+            else
+            {
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+
+            if (isMax) WindowState = WindowState.Maximized;
+        }
+        finally
+        {
+            _isRestoringWindow = false;
+        }
+    }
+
+    private void TriggerSaveWindowPlacement()
+    {
+        if (_isRestoringWindow || ViewModel?.LauncherSettings == null) return;
+        if (WindowState == WindowState.Minimized) return; // 最小化不记位置
+
+        _windowSaveTimer?.Stop();
+        _windowSaveTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _windowSaveTimer.Tick += (_, _) =>
+        {
+            _windowSaveTimer.Stop();
+            SaveWindowPlacement();
+        };
+        _windowSaveTimer.Start();
+    }
+
+    private void SaveWindowPlacement()
+    {
+        var ls = ViewModel?.LauncherSettings;
+        if (ls == null) return;
+
+        // 记录是否最大化
+        bool isMax = WindowState == WindowState.Maximized;
+        ls.Store.SetBool("WindowMaximized", isMax);
+
+        // 如果当前是 Normal 状态，才记录真实的 Left/Top/Width/Height
+        // 如果是 Maximized，RestoreBounds 会给出它恢复成普通窗口时的尺寸和位置
+        if (WindowState == WindowState.Normal)
+        {
+            ls.Store.SetDouble("WindowWidth", ActualWidth);
+            ls.Store.SetDouble("WindowHeight", ActualHeight);
+            ls.Store.SetDouble("WindowLeft", Left);
+            ls.Store.SetDouble("WindowTop", Top);
+        }
+        else if (WindowState == WindowState.Maximized)
+        {
+            ls.Store.SetDouble("WindowWidth", RestoreBounds.Width);
+            ls.Store.SetDouble("WindowHeight", RestoreBounds.Height);
+            ls.Store.SetDouble("WindowLeft", RestoreBounds.Left);
+            ls.Store.SetDouble("WindowTop", RestoreBounds.Top);
+        }
+
+        ls.Store.Save();
+    }
+    // ============ 4.2 页面切换动画 ============
+
+    private void AnimateToolChange()
+    {
+        if (ToolContentPanel == null) return;
+
+        // 1. 清除旧动画
+        ToolContentPanel.BeginAnimation(UIElement.OpacityProperty, null);
+        ToolContentTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+
+        // 2. ★ 关键：先把基础值设为最终状态
+        ToolContentPanel.Opacity = 1;
+        ToolContentTranslate.Y = 0;
+
+        bool isSlowMode = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+        int durationMs = isSlowMode ? 2200 : 220; // 按 Shift 慢放 10 倍
+
+        // 3. 动画设定：From 从起始状态开始，To 到最终状态，结束后回到基础值（1 和 0）
+        var fadeAnim = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            Duration = TimeSpan.FromMilliseconds(durationMs),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        ToolContentPanel.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+
+        var slideAnim = new DoubleAnimation
+        {
+            From = 8,
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(durationMs),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        ToolContentTranslate.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+    }
+    // ============ 自定义标题栏按钮 ============
+
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState.Minimized;
+    }
+
+    private void MaximizeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+            WindowState = WindowState.Normal;
+        else
+            WindowState = WindowState.Maximized;
+    }
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
     }
 }

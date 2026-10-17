@@ -6,6 +6,9 @@
         xmlns:conv="clr-namespace:VolumeSuite.Converters"
         xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
         xmlns:cp="clr-namespace:ColorPicker;assembly=ColorPicker"
+
+
+        
         Title="VolumeSuite"
         Width="880" Height="600"
         MinWidth="640" MinHeight="440"
@@ -23,6 +26,54 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+
+        <!-- 自定义标题栏按钮样式 -->
+        <Style x:Key="TitleBarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#DDDDDD"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#15FFFFFF"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#08FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 关闭按钮特供样式（悬停变红） -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button" BasedOn="{StaticResource TitleBarButtonStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#E81123"/>
+                                <!-- Windows 标准的红 -->
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#F1707A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- 自定义开关：蓝色轨道，圆头滑块 -->
         <Style x:Key="AppToggleSwitch" TargetType="ToggleButton">
@@ -448,28 +499,38 @@
     <Grid>
 
         <!-- ========== 第一层：覆盖整窗的底 ========== -->
-        <!-- 不透明底（图片模式显示，毛玻璃模式隐藏） -->
         <Border x:Name="OpaqueUnderlay" Background="#FE1A1A1A"/>
-
-        <!-- 背景图 -->
-        <Image x:Name="BackgroundImage"
-               Source="pack://application:,,,/background.png"
-               Stretch="UniformToFill"
-               Opacity="0.4"
-               RenderOptions.BitmapScalingMode="HighQuality"/>
-
-        <!-- 遮罩层 -->
+        <Image x:Name="BackgroundImage" Source="pack://application:,,,/background.png" Stretch="UniformToFill" Opacity="0.4" RenderOptions.BitmapScalingMode="HighQuality"/>
         <Border x:Name="BackgroundShade" Background="#99000000"/>
 
         <!-- ========== 第二层：标题栏 + 内容 ========== -->
+        <!-- ★ 就是这个 Grid 被误删了，导致所有东西叠在一起 -->
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <!-- 第 0 行：标题栏 -->
                 <RowDefinition Height="*"/>
+                <!-- 第 1 行：内容区 -->
             </Grid.RowDefinitions>
 
-            <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="VolumeSuite"/>
+            <!-- 顶部自定义标题栏 -->
+            <Grid Grid.Row="0" x:Name="AppTitleBar" Height="32" Background="Transparent">
+                <TextBlock Text="VolumeSuite" VerticalAlignment="Center" Margin="16,0,0,0" Foreground="#DDDDDD" FontSize="12" FontWeight="SemiBold"/>
 
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="MinimizeButton" Click="MinimizeButton_Click" Width="46" Height="32" Style="{StaticResource TitleBarButtonStyle}" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path Data="M 0,0 L 10,0" Stroke="#DDDDDD" StrokeThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="MaximizeButton" Click="MaximizeButton_Click" Width="46" Height="32" Style="{StaticResource TitleBarButtonStyle}" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path x:Name="MaximizeIcon" Data="M 0,0 L 9,0 L 9,9 L 0,9 Z" Stroke="#DDDDDD" StrokeThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="CloseButton" Click="CloseButton_Click" Width="46" Height="32" Style="{StaticResource CloseButtonStyle}" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path Data="M 0,0 L 10,10 M 10,0 L 0,10" Stroke="#DDDDDD" StrokeThickness="1" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- 内容区（包含左右两列） -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="220"/>
@@ -477,10 +538,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- ============ 左侧侧栏 ============ -->
-                <Border Grid.Column="0"
-                        Background="Transparent"
-                        BorderBrush="#33FFFFFF"
-                        BorderThickness="0,0,1,0">
+                <Border Grid.Column="0" Background="Transparent" BorderBrush="#33FFFFFF" BorderThickness="0,0,1,0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
@@ -488,19 +546,11 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <ScrollViewer Grid.Row="0"
-                                      VerticalScrollBarVisibility="Auto"
-                                      Padding="10,12">
+                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="10,12">
                             <ItemsControl x:Name="SidebarList" ItemsSource="{Binding Tools}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border x:Name="SideItem"
-                                                CornerRadius="6"
-                                                Padding="10,10"
-                                                Margin="0,0,0,2"
-                                                Cursor="Hand"
-                                                MouseLeftButtonUp="SideItem_Click"
-                                                MouseRightButtonUp="SideItem_RightClick">
+                                        <Border x:Name="SideItem" CornerRadius="6" Padding="10,10" Margin="0,0,0,2" Cursor="Hand" MouseLeftButtonUp="SideItem_Click" MouseRightButtonUp="SideItem_RightClick">
                                             <Border.Style>
                                                 <Style TargetType="Border">
                                                     <Setter Property="Background" Value="Transparent"/>
@@ -522,12 +572,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <Rectangle Grid.Column="0"
-                                                           Width="3" Height="16"
-                                                           Fill="#5B8DEF"
-                                                           RadiusX="1.5" RadiusY="1.5"
-                                                           VerticalAlignment="Center"
-                                                           Margin="0,0,10,0">
+                                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="#5B8DEF" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
                                                     <Rectangle.Style>
                                                         <Style TargetType="Rectangle">
                                                             <Setter Property="Opacity" Value="0"/>
@@ -536,16 +581,14 @@
                                                                     <DataTrigger.EnterActions>
                                                                         <BeginStoryboard>
                                                                             <Storyboard>
-                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                                 To="1" Duration="0:0:0.30"/>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.30"/>
                                                                             </Storyboard>
                                                                         </BeginStoryboard>
                                                                     </DataTrigger.EnterActions>
                                                                     <DataTrigger.ExitActions>
                                                                         <BeginStoryboard>
                                                                             <Storyboard>
-                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                                 To="0" Duration="0:0:0.30"/>
+                                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.30"/>
                                                                             </Storyboard>
                                                                         </BeginStoryboard>
                                                                     </DataTrigger.ExitActions>
@@ -555,18 +598,8 @@
                                                     </Rectangle.Style>
                                                 </Rectangle>
 
-                                                <iconPacks:PackIconLucide Grid.Column="1"
-                                                                          Kind="{Binding Manifest.Glyph, Converter={StaticResource LucideKindConverter}}"
-                                                                          Width="16" Height="16"
-                                                                          Foreground="#CCCCCC"
-                                                                          VerticalAlignment="Center"
-                                                                          Margin="0,0,10,0"/>
-
-                                                <TextBlock Grid.Column="2"
-                                                           Text="{Binding Manifest.DisplayName}"
-                                                           FontSize="13"
-                                                           Foreground="#DDDDDD"
-                                                           VerticalAlignment="Center"/>
+                                                <iconPacks:PackIconLucide Grid.Column="1" Kind="{Binding Manifest.Glyph, Converter={StaticResource LucideKindConverter}}" Width="16" Height="16" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding Manifest.DisplayName}" FontSize="13" Foreground="#DDDDDD" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -574,19 +607,9 @@
                             </ItemsControl>
                         </ScrollViewer>
 
-                        <Border Grid.Row="1"
-                                Height="1"
-                                Background="#33FFFFFF"
-                                Margin="10,4,10,4"/>
+                        <Border Grid.Row="1" Height="1" Background="#33FFFFFF" Margin="10,4,10,4"/>
 
-                        <Border Grid.Row="2"
-                                x:Name="LauncherSettingsButton"
-                                CornerRadius="6"
-                                Padding="10,10"
-                                Margin="10,0,10,10"
-                                Cursor="Hand"
-                                MouseLeftButtonUp="LauncherSettings_Click"
-                                DataContext="{Binding LauncherSettings}">
+                        <Border Grid.Row="2" x:Name="LauncherSettingsButton" CornerRadius="6" Padding="10,10" Margin="10,0,10,10" Cursor="Hand" MouseLeftButtonUp="LauncherSettings_Click" DataContext="{Binding LauncherSettings}">
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Background" Value="Transparent"/>
@@ -608,12 +631,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Rectangle Grid.Column="0"
-                                           Width="3" Height="16"
-                                           Fill="#5B8DEF"
-                                           RadiusX="1.5" RadiusY="1.5"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,10,0">
+                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="#5B8DEF" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
                                     <Rectangle.Style>
                                         <Style TargetType="Rectangle">
                                             <Setter Property="Opacity" Value="0"/>
@@ -622,16 +640,14 @@
                                                     <DataTrigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                 To="1" Duration="0:0:0.30"/>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.30"/>
                                                             </Storyboard>
                                                         </BeginStoryboard>
                                                     </DataTrigger.EnterActions>
                                                     <DataTrigger.ExitActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                                 To="0" Duration="0:0:0.30"/>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.30"/>
                                                             </Storyboard>
                                                         </BeginStoryboard>
                                                     </DataTrigger.ExitActions>
@@ -641,166 +657,170 @@
                                     </Rectangle.Style>
                                 </Rectangle>
 
-                                <iconPacks:PackIconLucide Grid.Column="1"
-                                                          Kind="Settings"
-                                                          Width="16" Height="16"
-                                                          Foreground="#CCCCCC"
-                                                          VerticalAlignment="Center"
-                                                          Margin="0,0,10,0"/>
-
-                                <TextBlock Grid.Column="2"
-                                           Text="启动器设置"
-                                           FontSize="13"
-                                           Foreground="#DDDDDD"
-                                           VerticalAlignment="Center"/>
+                                <iconPacks:PackIconLucide Grid.Column="1" Kind="Settings" Width="16" Height="16" Foreground="#CCCCCC" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="2" Text="启动器设置" FontSize="13" Foreground="#DDDDDD" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
                     </Grid>
                 </Border>
 
                 <!-- ============ 右侧详情 ============ -->
-                <ScrollViewer Grid.Column="1" Padding="36,28,36,36"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <!-- ★ 新增：上下边缘淡出遮罩 -->
-                    <ScrollViewer.OpacityMask>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="Transparent" Offset="0.0"/>
-                            <GradientStop Color="Black" Offset="0.03"/>
-                            <!-- 顶部 3% 处开始清晰 -->
-                            <GradientStop Color="Black" Offset="0.97"/>
-                            <!-- 底部 97% 处开始淡出 -->
-                            <GradientStop Color="Transparent" Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </ScrollViewer.OpacityMask>
+                <Grid Grid.Column="1">
+                    <ScrollViewer Padding="36,28,36,36" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="ToolContentPanel" DataContext="{Binding SelectedTool}">
+                            <StackPanel.RenderTransform>
+                                <TranslateTransform x:Name="ToolContentTranslate" Y="0"/>
+                            </StackPanel.RenderTransform>
 
-                    <StackPanel DataContext="{Binding SelectedTool}">
+                            <Grid Margin="0,0,0,28">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                        <Grid Margin="0,0,0,28">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding Manifest.DisplayName}" FontSize="24" FontWeight="SemiBold" Foreground="#FFFFFF"/>
+                                    <TextBlock Text="{Binding Manifest.Description}" FontSize="13" Opacity="0.7" Margin="0,6,0,0" Foreground="#FFFFFF"/>
+                                </StackPanel>
 
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="{Binding Manifest.DisplayName}"
-                                           FontSize="24" FontWeight="SemiBold"
-                                           Foreground="#FFFFFF"/>
-                                <TextBlock Text="{Binding Manifest.Description}"
-                                           FontSize="13" Opacity="0.7"
-                                           Margin="0,6,0,0" Foreground="#FFFFFF"/>
-                            </StackPanel>
+                                <Button Grid.Column="1" Width="44" Height="44" Background="Transparent" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center" Click="ToggleButton_Click">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Opacity" Value="0.6"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Bg" Background="Transparent" CornerRadius="22">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF"/>
+                                                                <Setter Property="Opacity" Value="1"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsLauncher}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <Grid Width="18" Height="18">
+                                        <Path x:Name="PlayIcon" Data="M 0,0 L 9.6,6.6 L 0,13.2 Z" Fill="White" Stroke="White" StrokeThickness="5" StrokeLineJoin="Round" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="4,0,0,-1">
+                                            <Path.Style>
+                                                <Style TargetType="Path">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Path.Style>
+                                        </Path>
+                                        <StackPanel x:Name="PauseIcon" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White"/>
+                                            <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White" Margin="4.8,0,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </Grid>
 
-                            <Button Grid.Column="1"
-                                    Width="44" Height="44"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Cursor="Hand"
-                                    VerticalAlignment="Center"
-                                    Click="ToggleButton_Click">
-                                <Button.Style>
-                                    <Style TargetType="Button">
-                                        <Setter Property="Opacity" Value="0.6"/>
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="Button">
-                                                    <Border x:Name="Bg" Background="Transparent" CornerRadius="22">
-                                                        <ContentPresenter HorizontalAlignment="Center"
-                                                                          VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter TargetName="Bg" Property="Background" Value="#33FFFFFF"/>
-                                                            <Setter Property="Opacity" Value="1"/>
-                                                        </Trigger>
-                                                    </ControlTemplate.Triggers>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                <Setter Property="Opacity" Value="1"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsLauncher}" Value="True">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                                <Grid Width="18" Height="18">
-                                    <Path x:Name="PlayIcon"
-                                          Data="M 0,0 L 9.6,6.6 L 0,13.2 Z"
-                                          Fill="White" Stroke="White"
-                                          StrokeThickness="5" StrokeLineJoin="Round"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Margin="4,0,0,-1">
-                                        <Path.Style>
-                                            <Style TargetType="Path">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Path.Style>
-                                    </Path>
-                                    <StackPanel x:Name="PauseIcon"
-                                                Orientation="Horizontal"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <StackPanel.Style>
-                                            <Style TargetType="StackPanel">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </StackPanel.Style>
-                                        <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White"/>
-                                        <Border Width="4.6" Height="16.8" CornerRadius="2.3" Background="White"
-                                                Margin="4.8,0,0,0"/>
-                                    </StackPanel>
-                                </Grid>
-                            </Button>
-                        </Grid>
+                            <ItemsControl ItemsSource="{Binding Sections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,24">
+                                            <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="4,0,0,10"/>
+                                            <Border CornerRadius="12" Padding="4" RenderTransformOrigin="0.5,0.5">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="RenderTransform">
+                                                            <Setter.Value>
+                                                                <ScaleTransform ScaleX="1.0" ScaleY="1.0"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Trigger.EnterActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1.03" Duration="0:0:0.25">
+                                                                                <DoubleAnimation.EasingFunction>
+                                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                                </DoubleAnimation.EasingFunction>
+                                                                            </DoubleAnimation>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1.03" Duration="0:0:0.25">
+                                                                                <DoubleAnimation.EasingFunction>
+                                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                                </DoubleAnimation.EasingFunction>
+                                                                            </DoubleAnimation>
+                                                                            <ColorAnimation Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#44FFFFFF" Duration="0:0:0.25"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </Trigger.EnterActions>
+                                                                <Trigger.ExitActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1.0" Duration="0:0:0.15">
+                                                                                <DoubleAnimation.EasingFunction>
+                                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                                </DoubleAnimation.EasingFunction>
+                                                                            </DoubleAnimation>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1.0" Duration="0:0:0.15">
+                                                                                <DoubleAnimation.EasingFunction>
+                                                                                    <CubicEase EasingMode="EaseOut"/>
+                                                                                </DoubleAnimation.EasingFunction>
+                                                                            </DoubleAnimation>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </Trigger.ExitActions>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                        <GradientStop Color="#1AFFFFFF" Offset="0"/>
+                                                        <GradientStop Color="#08FFFFFF" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <Border.BorderBrush>
+                                                    <SolidColorBrush Color="#20FFFFFF"/>
+                                                </Border.BorderBrush>
+                                                <Border.BorderThickness>1</Border.BorderThickness>
 
-                        <ItemsControl ItemsSource="{Binding Sections}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="0,0,0,24">
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontSize="14" FontWeight="SemiBold"
-                                                   Foreground="#FFFFFF"
-                                                   Margin="4,0,0,10"/>
-                                        <Border CornerRadius="12" Padding="4">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                    <GradientStop Color="#1AFFFFFF" Offset="0"/>
-                                                    <GradientStop Color="#08FFFFFF" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <Border.BorderBrush>
-                                                <SolidColorBrush Color="#20FFFFFF"/>
-                                            </Border.BorderBrush>
-                                            <Border.BorderThickness>1</Border.BorderThickness>
-
-                                            <ItemsControl ItemsSource="{Binding Items}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <ContentControl Content="{Binding}"/>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </Border>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                    </StackPanel>
-                </ScrollViewer>
+                                                <ItemsControl ItemsSource="{Binding Items}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <ContentControl Content="{Binding}"/>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </Grid>
     </Grid>
