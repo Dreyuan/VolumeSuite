@@ -529,4 +529,43 @@ public partial class ColorItemViewModel : SettingsItemViewModel
         catch { }
         return System.Windows.Media.Colors.Black;
     }
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private bool _isPicking;
+
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private System.Windows.Media.Brush? _pickPreviewBrush;
+
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+    private string _pickPreviewHex = "";
+
+    private System.Windows.Media.Color _originalColor;
+
+    public void StartPick()
+    {
+        _originalColor = Value;
+        IsPicking = true;
+    }
+
+    public void UpdatePick(System.Windows.Media.Color color)
+    {
+        var b = new System.Windows.Media.SolidColorBrush(color);
+        b.Freeze();
+        PickPreviewBrush = b;
+        PickPreviewHex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
+    public void CommitPick(System.Windows.Media.Color color)
+    {
+        IsPicking = false;
+        Value = color; // 这会触发绑定更新色相环
+
+        // 强制通知一次状态变化，确保界面收起
+        OnPropertyChanged(nameof(IsPicking));
+    }
+
+    public void CancelPick()
+    {
+        IsPicking = false;
+        Value = _originalColor;
+    }
 }

@@ -39,6 +39,17 @@ public static class LauncherManifest
                             },
                             new()
                             {
+                                Key = "WindowCornerRadius",
+                                Label = "窗口圆角半径 (px)",
+                                Type = "number",
+                                Min = 0,
+                                Max = 30,
+                                Step = 1,
+                                Decimals = 0,
+                                Default = 12,
+                            },
+                            new()
+                            {
                                 Key = "TitleBarTint",
                                 Label = "标题栏色调",
                                 Type = "dropdown",

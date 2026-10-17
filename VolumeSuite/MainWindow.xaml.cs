@@ -27,6 +27,20 @@ public partial class MainWindow : Window
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
 
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+
+        // 窗口大小改变时重新计算圆角
+        SizeChanged += (_, _) => ApplyWindowCorner();
+
+        // AnySettingsChanged 里
+        ApplyWindowCorner(_lastStraightCorner);
+
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+        InitColorPickerHooks();  // ★ 初始化吸色钩子
+        InitCornerHooks();
+
+
+
         ViewModel.LauncherSettings.SettingsChanged += ApplyBackground;
 
         // 启动器设置里任意一项变化时，重新应用背景
@@ -38,6 +52,9 @@ public partial class MainWindow : Window
             SyncTintOpacityFromHex(key);
 
             ApplyBackground();
+
+            // ★ 加上这一行
+            ApplyWindowCorner();
         };
 
         Loaded += (_, _) =>
@@ -49,49 +66,106 @@ public partial class MainWindow : Window
                     System.Windows.Media.Colors.Transparent;
 
             ApplyBackground();
-        };
+            ApplyWindowCorner();
 
-        // ★ 最小化/恢复时控制缩略图是否图标化
-        /*
-         StateChanged += (_, _) =>
+            VolumeSuite.Services.GlobalInputHook.Start(); // ★ 启动全局钩子
+        };
+    }
+
+    // ============ 初始化全局吸色钩子 ============
+
+    private int _lastHookX;
+    private int _lastHookY;
+
+    private void InitColorPickerHooks()
+    {
+        VolumeSuite.Services.GlobalInputHook.MouseMoved += (x, y) =>
         {
-            var ls = ViewModel?.LauncherSettings;
-            if (ls == null) return;
-            bool isAcrylic = ls.Store.GetString("BackgroundMode", "image") == "acrylic";
-
-            if (WindowState == WindowState.Minimized)
-            {
-                if (isAcrylic)
-                {
-                    // 延迟 300ms 再图标化，让最小化动画用真实缩略图
-                    var timer = new System.Windows.Threading.DispatcherTimer
-                    {
-                        Interval = TimeSpan.FromMilliseconds(300)
-                    };
-                    timer.Tick += (_, _) =>
-                    {
-                        timer.Stop();
-                        SetIconicThumbnail(true);
-                    };
-                    timer.Start();
-                }
-                // 图片模式：不图标化，让 DWM 用正常缩略图
-            }
-            else
-            {
-                // 恢复：立即重设模糊，让动画期间就有模糊
-                if (isAcrylic)
-                    AcrylicHelper.EnableAcrylic(this, 0x00000000);
-
-                SetIconicThumbnail(false);
-            }
+            _lastHookX = x;
+            _lastHookY = y;
+            var vm = FindPickingColorItem();
+            if (vm == null) return;
+            var color = GetScreenColor(x, y);
+            vm.UpdatePick(color);
         };
-        */
+
+        VolumeSuite.Services.GlobalInputHook.EnterPressed += () =>
+        {
+            var vm = FindPickingColorItem();
+            if (vm == null) return;
+            var color = GetScreenColor(_lastHookX, _lastHookY);
+            Dispatcher.BeginInvoke(new Action(() => vm.CommitPick(color)));
+        };
+
+        VolumeSuite.Services.GlobalInputHook.MouseRightClicked += () =>
+        {
+            var vm = FindPickingColorItem();
+            if (vm == null) return;
+            Dispatcher.BeginInvoke(new Action(() => vm.CancelPick()));
+        };
+
+        VolumeSuite.Services.GlobalInputHook.EscapePressed += () =>
+        {
+            var vm = FindPickingColorItem();
+            if (vm == null) return;
+            Dispatcher.BeginInvoke(new Action(() => vm.CancelPick()));
+        };
+    }
+
+    // 辅助方法：遍历当前设置，找出正在吸色的那一个
+    private ColorItemViewModel? FindPickingColorItem()
+    {
+        if (ViewModel?.SelectedTool?.Sections == null) return null;
+        foreach (var sec in ViewModel.SelectedTool.Sections)
+        {
+            foreach (var item in sec.Items)
+            {
+                if (item is ColorItemViewModel cvm && cvm.IsPicking)
+                    return cvm;
+            }
+        }
+        return null;
+    }
+
+    // 获取屏幕像素颜色（Win32 API）
+
+    [DllImport("gdi32.dll")]
+    static extern IntPtr CreateRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect);
+
+    [DllImport("gdi32.dll")]
+    static extern int CombineRgn(IntPtr hrgnDest, IntPtr hrgnSrc1, IntPtr hrgnSrc2, int iCombineMode);
+
+    [DllImport("gdi32.dll")]
+    static extern bool DeleteObject(IntPtr hObject);
+
+    private const int RGN_OR = 2;
+    [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [DllImport("gdi32.dll")] static extern uint GetPixel(IntPtr hdc, int nXPos, int nYPos);
+
+    [DllImport("gdi32.dll")]
+    static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
+
+    [DllImport("user32.dll")]
+
+    static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
+
+    private static System.Windows.Media.Color GetScreenColor(int x, int y)
+    {
+        IntPtr hdc = GetDC(IntPtr.Zero);
+        uint pixel = GetPixel(hdc, x, y);
+        ReleaseDC(IntPtr.Zero, hdc);
+
+        byte r = (byte)(pixel & 0x000000FF);
+        byte g = (byte)((pixel & 0x0000FF00) >> 8);
+        byte b = (byte)((pixel & 0x00FF0000) >> 16);
+        return System.Windows.Media.Color.FromRgb(r, g, b);
     }
 
     /// <summary>点 X 时只隐藏窗口，不真的关闭。</summary>
     protected override void OnClosing(CancelEventArgs e)
     {
+        VolumeSuite.Services.GlobalInputHook.Stop(); // ★ 关闭时释放钩子
         e.Cancel = true;
         Hide();
     }
@@ -217,6 +291,44 @@ public partial class MainWindow : Window
         _capturingHotkey = null;
         _captureKeys.Clear();
     }
+    private bool _isCornerStraight = false;
+
+    private void InitCornerHooks()
+    {
+        VolumeSuite.Services.GlobalInputHook.MouseMoved += (x, y) =>
+        {
+            if (FindPickingColorItem() != null || WindowState != WindowState.Normal) return;
+
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            var topLeft = PointToScreen(new Point(0, 0));
+            var bottomRight = PointToScreen(new Point(ActualWidth, ActualHeight));
+
+            int hitZone = 20;
+
+            bool nearLeft = Math.Abs(x - topLeft.X) < hitZone;
+            bool nearRight = Math.Abs(x - bottomRight.X) < hitZone;
+            bool nearTop = Math.Abs(y - topLeft.Y) < hitZone;
+            bool nearBottom = Math.Abs(y - bottomRight.Y) < hitZone;
+
+            string? straightCorner = null;
+            if (nearLeft && nearTop) straightCorner = "TopLeft";
+            else if (nearRight && nearTop) straightCorner = "TopRight";
+            else if (nearLeft && nearBottom) straightCorner = "BottomLeft";
+            else if (nearRight && nearBottom) straightCorner = "BottomRight";
+
+            // 只有状态改变时才重绘圆角，避免频繁触发导致卡顿
+            if (straightCorner != _lastStraightCorner)
+            {
+                _lastStraightCorner = straightCorner;
+                Dispatcher.BeginInvoke(new Action(() => ApplyWindowCorner(_lastStraightCorner)));
+            }
+        };
+    }
+    private string? _lastStraightCorner = null;
+
+    
 
     private static string KeyToName(Key key) => key switch
     {
@@ -576,5 +688,69 @@ public partial class MainWindow : Window
         {
             _syncingTint = false;
         }
+    }
+    private void StartPickColor_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.DataContext is ColorItemViewModel vm)
+            vm.StartPick();
+    }
+    // ============ 应用窗口圆角 ============
+
+    // ============ 应用窗口圆角（支持单角变直） ============
+
+    private void ApplyWindowCorner(string? straightCorner = null)
+    {
+        var ls = ViewModel?.LauncherSettings;
+        if (ls == null) return;
+
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        if (WindowState == WindowState.Maximized)
+        {
+            SetWindowRgn(hwnd, IntPtr.Zero, true);
+            return;
+        }
+
+        double radius = ls.Store.GetDouble("WindowCornerRadius", 12);
+        if (radius <= 0)
+        {
+            SetWindowRgn(hwnd, IntPtr.Zero, true);
+            return;
+        }
+
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        int scaledRadius = (int)(radius * dpi.DpiScaleX);
+        int r2 = scaledRadius * 2;
+
+        // ★ 修复了 DPI 缩放下的尺寸计算问题
+        int width = (int)(ActualWidth * dpi.DpiScaleX);
+        int height = (int)(ActualHeight * dpi.DpiScaleY);
+        if (width <= 0 || height <= 0) return;
+
+        // 1. 先画一个正常的圆角区域
+        IntPtr hRgn = CreateRoundRectRgn(0, 0, width + 1, height + 1, r2, r2);
+
+        // 2. 如果指定了需要变直角的角，就用矩形把它填平
+        if (!string.IsNullOrEmpty(straightCorner))
+        {
+            IntPtr hCorner = IntPtr.Zero;
+            if (straightCorner == "TopLeft")
+                hCorner = CreateRectRgn(0, 0, r2, r2);
+            else if (straightCorner == "TopRight")
+                hCorner = CreateRectRgn(width - r2, 0, width + 1, r2);
+            else if (straightCorner == "BottomLeft")
+                hCorner = CreateRectRgn(0, height - r2, r2, height + 1);
+            else if (straightCorner == "BottomRight")
+                hCorner = CreateRectRgn(width - r2, height - r2, width + 1, height + 1);
+
+            if (hCorner != IntPtr.Zero)
+            {
+                CombineRgn(hRgn, hRgn, hCorner, RGN_OR); // 合并区域
+                DeleteObject(hCorner); // 释放临时矩形内存
+            }
+        }
+
+        SetWindowRgn(hwnd, hRgn, true);
     }
 }
