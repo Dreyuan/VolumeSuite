@@ -271,18 +271,49 @@ public partial class PathItemViewModel : SettingsItemViewModel
 {
     [ObservableProperty] private string _value = "";
 
+    /// <summary>"file" 或 "folder"</summary>
     public string Mode { get; }
+    public bool IsBackgroundImage => Key == "BackgroundImagePath";
+
+    // ★ 用于存放历史图片的缩略图
+    public System.Collections.ObjectModel.ObservableCollection<string> Images { get; } = new();
 
     public PathItemViewModel(SettingsItem schema, ToolViewModel owner) : base(schema, owner)
     {
         _value = owner.Store.GetString(schema.Key);
         Mode = schema.Mode ?? "file";
+
+        if (IsBackgroundImage)
+            RefreshImages();
     }
 
     partial void OnValueChanged(string value)
     {
         Owner.Store.SetString(Key, value ?? "");
         Persist();
+
+        if (IsBackgroundImage)
+            RefreshImages();
+    }
+
+    public void RefreshImages()
+    {
+        Images.Clear();
+        try
+        {
+            string bgDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LauncherData", "Backgrounds");
+            if (!System.IO.Directory.Exists(bgDir)) return;
+
+            var files = System.IO.Directory.GetFiles(bgDir, "*.*")
+                .Where(s => s.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+                            s.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                            s.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                            s.EndsWith(".bmp", StringComparison.OrdinalIgnoreCase));
+
+            foreach (var file in files)
+                Images.Add(file);
+        }
+        catch { }
     }
 }
 

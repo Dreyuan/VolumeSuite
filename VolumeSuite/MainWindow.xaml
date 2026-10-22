@@ -27,6 +27,16 @@
 
     <Window.Resources>
 
+        <!-- 全局文字阴影（默认空，由代码动态控制） -->
+        <DropShadowEffect x:Key="GlobalTextShadow" Color="Black" BlurRadius="4" ShadowDepth="1" Opacity="0"/>
+
+        
+
+        <conv:PathToImageSourceConverter x:Key="PathToImageConverter"/>
+        <!-- 全局强调色 -->
+        <Color x:Key="AccentColor">#FF0000</Color>
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}"/>
+
         <!-- 自定义标题栏按钮样式 -->
         <Style x:Key="TitleBarButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
@@ -76,6 +86,7 @@
         </Style>
 
         <!-- 自定义开关：蓝色轨道，圆头滑块 -->
+        <!-- 自定义开关：使用动态强调色 -->
         <Style x:Key="AppToggleSwitch" TargetType="ToggleButton">
             <Setter Property="Width" Value="41"/>
             <Setter Property="Height" Value="22"/>
@@ -84,14 +95,16 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Grid>
+                            <!-- 轨道 -->
                             <Border x:Name="Track"
                                     BorderBrush="#55FFFFFF"
                                     BorderThickness="1"
-                                    CornerRadius="11">
-                                <Border.Background>
-                                    <SolidColorBrush Color="#00000000"/>
-                                </Border.Background>
+                                    CornerRadius="11"
+                                    Background="{DynamicResource AccentBrush}">
+                                <Border.Opacity>0</Border.Opacity>
+                                <!-- 默认关闭时透明 -->
                             </Border>
+                            <!-- 滑块 -->
                             <Border x:Name="Thumb"
                                     Width="17" Height="17"
                                     CornerRadius="8.5"
@@ -109,12 +122,13 @@
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <ColorAnimation Storyboard.TargetName="Track"
-                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                    To="#5B8DEF" Duration="0:0:0.2"/>
+                                            <!-- 开启时：轨道透明度变为 1，滑块右移 -->
+                                            <DoubleAnimation Storyboard.TargetName="Track"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.2"/>
                                             <DoubleAnimation Storyboard.TargetName="ThumbTransform"
-                                                     Storyboard.TargetProperty="X"
-                                                     To="19" Duration="0:0:0.2">
+                                                             Storyboard.TargetProperty="X"
+                                                             To="19" Duration="0:0:0.2">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut"/>
                                                 </DoubleAnimation.EasingFunction>
@@ -126,12 +140,13 @@
                                 <Trigger.ExitActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <ColorAnimation Storyboard.TargetName="Track"
-                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                    To="#00000000" Duration="0:0:0.2"/>
+                                            <!-- 关闭时：轨道透明度变为 0，滑块左移 -->
+                                            <DoubleAnimation Storyboard.TargetName="Track"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0" Duration="0:0:0.2"/>
                                             <DoubleAnimation Storyboard.TargetName="ThumbTransform"
-                                                     Storyboard.TargetProperty="X"
-                                                     To="0" Duration="0:0:0.2">
+                                                             Storyboard.TargetProperty="X"
+                                                             To="0" Duration="0:0:0.2">
                                                 <DoubleAnimation.EasingFunction>
                                                     <CubicEase EasingMode="EaseOut"/>
                                                 </DoubleAnimation.EasingFunction>
@@ -147,29 +162,33 @@
         </Style>
 
         <!-- 自定义滑条：蓝色圆头滑块，蓝色进度 -->
+        <!-- 自定义滑条：使用动态强调色 -->
         <Style x:Key="AppSlider" TargetType="Slider">
             <Setter Property="Height" Value="20"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Slider">
                         <Grid VerticalAlignment="Center">
+                            <!-- 底层轨道 -->
                             <Border Height="4"
                                     Background="#33FFFFFF"
                                     CornerRadius="2"
                                     VerticalAlignment="Center"/>
                             <Track x:Name="PART_Track">
+                                <!-- 左侧已选部分 -->
                                 <Track.DecreaseRepeatButton>
                                     <RepeatButton Command="Slider.DecreaseLarge">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
                                                 <Border Height="4"
-                                                        Background="#5B8DEF"
+                                                        Background="{DynamicResource AccentBrush}"
                                                         CornerRadius="2"
                                                         VerticalAlignment="Center"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
                                 </Track.DecreaseRepeatButton>
+                                <!-- 右侧未选部分 -->
                                 <Track.IncreaseRepeatButton>
                                     <RepeatButton Command="Slider.IncreaseLarge">
                                         <RepeatButton.Template>
@@ -179,12 +198,13 @@
                                         </RepeatButton.Template>
                                     </RepeatButton>
                                 </Track.IncreaseRepeatButton>
+                                <!-- 滑块 -->
                                 <Track.Thumb>
                                     <Thumb>
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
                                                 <Grid Width="16" Height="16">
-                                                    <Ellipse Fill="#5B8DEF"/>
+                                                    <Ellipse Fill="{DynamicResource AccentBrush}"/>
                                                     <Ellipse Width="6" Height="6" Fill="White"/>
                                                 </Grid>
                                             </ControlTemplate>
@@ -449,27 +469,63 @@
 
         <DataTemplate DataType="{x:Type vm:PathItemViewModel}">
             <Border Padding="14,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Label}" FontSize="13"
-                               Foreground="#E0E0E0" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Border Background="#2A2A2A" CornerRadius="6"
-                                Padding="10,6" MinWidth="280" MaxWidth="360"
-                                VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Value}" FontSize="12"
-                                       Foreground="#CCCCCC"
-                                       TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                        <Button Content="浏览" Width="56" Height="30"
-                                Margin="8,0,0,0"
-                                Click="PathBrowse_Click"/>
-                    </StackPanel>
-                </Grid>
+                <StackPanel>
+                    <!-- 原有的路径和浏览按钮 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Label}" FontSize="13"
+                                   Foreground="#E0E0E0" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Border Background="#2A2A2A" CornerRadius="6"
+                                    Padding="10,6" MinWidth="280" MaxWidth="360"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Value}" FontSize="12"
+                                           Foreground="#CCCCCC"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <Button Content="浏览" Width="56" Height="30"
+                                    Margin="8,0,0,0"
+                                    Click="PathBrowse_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- ★ 缩略图列表（只在背景图片项显示） -->
+                    <ItemsControl ItemsSource="{Binding Images}" Margin="0,12,0,0"
+                                  Visibility="{Binding IsBackgroundImage, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <!-- 删掉了这里的 Background="#1AFFFFFF" -->
+                                <Border Width="80" Height="50" CornerRadius="6" Margin="0,0,8,8"
+                                        BorderBrush="#33FFFFFF" BorderThickness="1"
+                                        Cursor="Hand" MouseLeftButtonDown="Thumbnail_Click" Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Opacity" Value="0.6"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{Binding Converter={StaticResource PathToImageConverter}}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </Border.Background>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </Border>
         </DataTemplate>
 
@@ -572,7 +628,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="#5B8DEF" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="{DynamicResource AccentBrush}" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
                                                     <Rectangle.Style>
                                                         <Style TargetType="Rectangle">
                                                             <Setter Property="Opacity" Value="0"/>
@@ -631,7 +687,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="#5B8DEF" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
+                                <Rectangle Grid.Column="0" Width="3" Height="16" Fill="{DynamicResource AccentBrush}" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" Margin="0,0,10,0">
                                     <Rectangle.Style>
                                         <Style TargetType="Rectangle">
                                             <Setter Property="Opacity" Value="0"/>
@@ -679,8 +735,16 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="{Binding Manifest.DisplayName}" FontSize="24" FontWeight="SemiBold" Foreground="#FFFFFF"/>
-                                    <TextBlock Text="{Binding Manifest.Description}" FontSize="13" Opacity="0.7" Margin="0,6,0,0" Foreground="#FFFFFF"/>
+                                    <TextBlock Text="{Binding Manifest.DisplayName}" 
+                                               FontSize="24" 
+                                               FontWeight="SemiBold" 
+                                               Foreground="#FFFFFF"
+                                               Effect="{DynamicResource GlobalTextShadow}"/>
+                                    <TextBlock Text="{Binding Manifest.Description}" 
+                                               FontSize="13" 
+                                               Opacity="0.7" 
+                                               Margin="0,6,0,0" 
+                                               Foreground="#FFFFFF"/>
                                 </StackPanel>
 
                                 <Button Grid.Column="1" Width="44" Height="44" Background="Transparent" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center" Click="ToggleButton_Click">

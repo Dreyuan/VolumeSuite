@@ -39,6 +39,8 @@ public partial class MainWindow : Window
         // AnySettingsChanged 里
         ApplyWindowCorner(_lastStraightCorner);
 
+        ApplyTextShadow();
+
         // 监听窗口位置、大小、状态变化
         LocationChanged += (_, _) => TriggerSaveWindowPlacement();
         SizeChanged += (_, _) => TriggerSaveWindowPlacement();
@@ -60,10 +62,9 @@ public partial class MainWindow : Window
             // ★ 如果改的是 8 位 HEX 色调，同步 alpha 到滑条
             SyncTintOpacityFromHex(key);
 
-            ApplyBackground();
+            ApplyAccentColor();
 
-            // ★ 加上这一行
-            ApplyWindowCorner();
+            ApplyBackground();
         };
 
         // 监听选中的工具变化，触发动画
@@ -82,8 +83,10 @@ public partial class MainWindow : Window
                     System.Windows.Media.Colors.Transparent;
 
             ApplyBackground();
+            ApplyAccentColor();
             ApplyWindowCorner();
             RestoreWindowPlacement();
+            ApplyTextShadow();
 
             VolumeSuite.Services.GlobalInputHook.Start(); // ★ 启动全局钩子
         };
@@ -378,16 +381,62 @@ public partial class MainWindow : Window
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                FileName = File.Exists(pvm.Value)
-                    ? Path.GetFileName(pvm.Value) : "",
-                InitialDirectory = File.Exists(pvm.Value)
-                    ? Path.GetDirectoryName(pvm.Value) : "",
+                FileName = File.Exists(pvm.Value) ? Path.GetFileName(pvm.Value) : "",
+                InitialDirectory = File.Exists(pvm.Value) ? Path.GetDirectoryName(pvm.Value) : "",
                 Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp|所有文件|*.*"
             };
+
             if (dialog.ShowDialog() == true)
-                pvm.Value = dialog.FileName;
+            {
+                string originalPath = dialog.FileName;
+
+                // ★ 如果当前选的是背景图，复制到软件内部
+                if (pvm.Key == "BackgroundImagePath")
+                {
+                    string? newPath = CopyImageToInternal(originalPath);
+                    if (newPath != null)
+                        pvm.Value = newPath;
+                }
+                else
+                {
+                    pvm.Value = originalPath;
+                }
+            }
         }
     }
+
+    // ============ 3.4 复制图片到内部目录 ============
+
+    private string? CopyImageToInternal(string sourcePath)
+    {
+        try
+        {
+            // 1. 确定内部目录：软件根目录/LauncherData/Backgrounds
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string bgDir = Path.Combine(appDir, "LauncherData", "Backgrounds");
+
+            if (!Directory.Exists(bgDir))
+                Directory.CreateDirectory(bgDir);
+
+            // 2. 生成带时间戳的新文件名（如 20251024_153022.png）
+            string ext = Path.GetExtension(sourcePath);
+            string fileName = $"{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
+            string destPath = Path.Combine(bgDir, fileName);
+
+            // 3. 复制文件
+            File.Copy(sourcePath, destPath, true);
+
+            // 4. 返回新的绝对路径（或者相对路径，这里为了兼容之前的代码，返回绝对路径）
+            return destPath;
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"图片复制失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            return null;
+        }
+    }
+
+
 
     // ============ 颜色项：展开/收起 ============
 
@@ -586,7 +635,7 @@ public partial class MainWindow : Window
         {
             var bmp = new BitmapImage();
             bmp.BeginInit();
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             bmp.StreamSource = stream;
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.EndInit();
@@ -930,5 +979,77 @@ public partial class MainWindow : Window
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         Close();
+    }
+    private void ApplyAccentColor()
+    {
+        var store = ViewModel?.LauncherSettings?.Store;
+        if (store == null) return;
+
+        var accentHex = store.GetString("AccentColor", "#5B8DEF");
+
+        // ★ 就是这一行，确保它存在并且拼写正确
+        var accentColor = ParseHexColor(accentHex, System.Windows.Media.Color.FromRgb(0x5B, 0x8D, 0xEF));
+
+        // 直接更新颜色资源，DynamicResource 会自动刷新
+        Resources["AccentColor"] = accentColor;
+    }
+
+    private void ApplyTextShadow()
+    {
+        var store = ViewModel?.LauncherSettings?.Store;
+        if (store == null) return;
+
+        bool enable = store.GetBool("EnableTextShadow", false);
+
+        if (enable)
+        {
+            // 开启：使用黑色阴影，加深加粗，让白字更清晰
+            Resources["GlobalTextShadow"] = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = System.Windows.Media.Colors.Black,
+                BlurRadius = 8,       // 范围更大
+                ShadowDepth = 2,      // 偏移更大
+                Opacity = 1.0         // 完全不透明
+            };
+        }
+        else
+        {
+            Resources["GlobalTextShadow"] = null;
+        }
+    }
+
+
+
+    // ============ 3.3 缩略图点击切换 ============
+
+    private void Thumbnail_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is string imagePath)
+        {
+            var ls = ViewModel?.LauncherSettings;
+            if (ls == null) return;
+
+            PathItemViewModel? targetPvm = null;
+            foreach (var section in ls.Sections)
+                foreach (var item in section.Items)
+                    if (item is PathItemViewModel pvm && pvm.Key == "BackgroundImagePath")
+                    {
+                        targetPvm = pvm;
+                        break;
+                    }
+
+            if (targetPvm == null) return;
+
+            // ★ 1. 检查文件是否存在
+            if (!File.Exists(imagePath))
+            {
+                MessageBox.Show("这张图片已经被删除了，将自动从列表中移除。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                targetPvm.RefreshImages(); // 刷新列表，剔除不存在的文件
+                return;
+            }
+
+            // 2. 正常切换
+            targetPvm.Value = imagePath;
+        }
     }
 }

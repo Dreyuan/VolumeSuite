@@ -117,6 +117,18 @@ public static class LauncherManifest
                                 Decimals = 0,
                                 Default = 60,
                             },
+                            new()
+                            {
+                                Key = "AccentColor",
+                                Label = "软件强调色",
+                                Type = "color",
+                            },
+                            new()
+                            {
+                                Key = "EnableTextShadow",
+                                Label = "启用文字阴影（增加可读性）",
+                                Type = "bool",
+                            },
                         }
                     }
                 }

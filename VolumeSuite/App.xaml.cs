@@ -32,9 +32,13 @@ public partial class App : Application
         base.OnStartup(e);
         StartPipeServer();
 
+        // 从软件资源里读取你自己的 ico
+        var iconUri = new Uri("pack://application:,,,/VolumeSuite.ico");
+        var iconStream = Application.GetResourceStream(iconUri)?.Stream;
+
         _trayIcon = new TaskbarIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = iconStream != null ? new System.Drawing.Icon(iconStream) : System.Drawing.SystemIcons.Application,
             ToolTipText = "VolumeSuite",
             Visibility = Visibility.Visible
         };

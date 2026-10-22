@@ -14,10 +14,12 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishTrimmed>false</PublishTrimmed>
+	  <ApplicationIcon>VolumeSuite.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="background.png" />
+	  <Resource Include="VolumeSuite.ico" />
   </ItemGroup>
 
   <ItemGroup>
