@@ -1,10 +1,8 @@
-﻿using System;
+﻿using H.NotifyIcon;
 using System.IO;
 using System.IO.Pipes;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
-using H.NotifyIcon;
+using VolumeSuite.Services;
 
 namespace VolumeSuite;
 
@@ -19,6 +17,29 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+
+        // ★ 1. 拦截 UI 线程异常（比如点击按钮报错）
+        DispatcherUnhandledException += (s, ev) =>
+        {
+            LogHelper.WriteError("UI 线程异常", ev.Exception.ToString());
+            MessageBox.Show($"发生错误：{ev.Exception.Message}\n详细信息已写入 logs 目录。", "程序错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            ev.Handled = true; // 告诉系统：我处理了，别闪退！
+        };
+
+        // ★ 2. 拦截后台线程异常（比如异步任务报错）
+        AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
+        {
+            var ex = ev.ExceptionObject as Exception;
+            LogHelper.WriteError("后台线程异常", ex?.ToString() ?? "未知错误");
+        };
+
+        // ★ 3. 拦截 Task 异常（如果任务没有被 await 可能会触发）
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, ev) =>
+        {
+            LogHelper.WriteError("Task 异常", ev.Exception.ToString());
+            ev.SetObserved();
+        };
+
         _mutex = new Mutex(true, MutexName, out bool createdNew);
 
         if (!createdNew)

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -11,7 +9,6 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using VolumeSuite.Services;
 using VolumeSuite.ViewModels;
-using static VolumeSuite.ViewModels.DropdownItemViewModel;
 
 namespace VolumeSuite;
 
@@ -22,6 +19,9 @@ public partial class MainWindow : Window
     private readonly List<string> _captureKeys = new();
     private System.Windows.Threading.DispatcherTimer? _windowSaveTimer;
     private bool _isRestoringWindow = false; // 防止恢复时误触发保存
+    private System.Windows.Threading.DispatcherTimer? _smoothScrollTimer;
+    private double _targetOffset = 0;
+    private double _currentOffset = 0;
 
     public MainWindow()
     {
@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         // AnySettingsChanged 里
         ApplyWindowCorner(_lastStraightCorner);
 
-        ApplyTextShadow();
+        ApplyTextEffects();
 
         // 监听窗口位置、大小、状态变化
         LocationChanged += (_, _) => TriggerSaveWindowPlacement();
@@ -63,7 +63,7 @@ public partial class MainWindow : Window
             SyncTintOpacityFromHex(key);
 
             ApplyAccentColor();
-
+            ApplyTextEffects();
             ApplyBackground();
         };
 
@@ -86,7 +86,7 @@ public partial class MainWindow : Window
             ApplyAccentColor();
             ApplyWindowCorner();
             RestoreWindowPlacement();
-            ApplyTextShadow();
+            ApplyTextEffects();
 
             VolumeSuite.Services.GlobalInputHook.Start(); // ★ 启动全局钩子
         };
@@ -199,56 +199,11 @@ public partial class MainWindow : Window
             ViewModel.SelectedTool = vm;
     }
 
-    private void SideItem_RightClick(object sender, MouseButtonEventArgs e)
+    private void RefreshTools_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement fe || fe.DataContext is not ToolViewModel vm)
-            return;
-
-        var menu = new ContextMenu();
-
-        var openDirItem = new MenuItem { Header = "打开配置目录" };
-        openDirItem.Click += (_, _) =>
-        {
-            try
-            {
-                System.Diagnostics.Process.Start("explorer.exe", vm.Manifest.Directory);
-            }
-            catch { }
-        };
-        menu.Items.Add(openDirItem);
-
-        var restartItem = new MenuItem { Header = "重启工具" };
-        restartItem.Click += (_, _) =>
-        {
-            vm.Stop();
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(500)
-            };
-            timer.Tick += (s, _) =>
-            {
-                timer.Stop();
-                vm.Start();
-            };
-            timer.Start();
-        };
-        menu.Items.Add(restartItem);
-
-        menu.Items.Add(new Separator());
-
-        var moreItem = new MenuItem { Header = "更多设置..." };
-        moreItem.Click += (_, _) =>
-        {
-            System.Windows.MessageBox.Show(
-                "复杂设置（如截图区域预览）由工具自己弹窗，暂未实现。",
-                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-        };
-        menu.Items.Add(moreItem);
-
-        menu.PlacementTarget = fe;
-        menu.IsOpen = true;
-        e.Handled = true;
+        ViewModel.RefreshTools();
     }
+
 
     /// <summary>左下角"启动器设置"按钮</summary>
     private void LauncherSettings_Click(object sender, MouseButtonEventArgs e)
@@ -685,27 +640,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // ============ 任务栏缩略图：强制显示图标 ============
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(
-        IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-
-    private const int DWMWA_FORCE_ICONIC_REPRESENTATION = 7;
-
-    private void SetIconicThumbnail(bool iconic)
-    {
-        try
-        {
-            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-            if (hwnd == IntPtr.Zero) return;
-            int value = iconic ? 1 : 0;
-            DwmSetWindowAttribute(hwnd, DWMWA_FORCE_ICONIC_REPRESENTATION,
-                ref value, sizeof(int));
-        }
-        catch { }
-    }
-
     // ============ 所有设置项的输入框：回车 = 立即提交 ============
 
     private void SettingTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -927,20 +861,17 @@ public partial class MainWindow : Window
 
     private void AnimateToolChange()
     {
-        if (ToolContentPanel == null) return;
+        if (RightContentArea == null) return;
 
-        // 1. 清除旧动画
-        ToolContentPanel.BeginAnimation(UIElement.OpacityProperty, null);
-        ToolContentTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+        RightContentArea.BeginAnimation(UIElement.OpacityProperty, null);
+        RightContentTranslate.BeginAnimation(TranslateTransform.YProperty, null);
 
-        // 2. ★ 关键：先把基础值设为最终状态
-        ToolContentPanel.Opacity = 1;
-        ToolContentTranslate.Y = 0;
+        RightContentArea.Opacity = 1;
+        RightContentTranslate.Y = 0;
 
         bool isSlowMode = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
-        int durationMs = isSlowMode ? 2200 : 220; // 按 Shift 慢放 10 倍
+        int durationMs = isSlowMode ? 2200 : 220;
 
-        // 3. 动画设定：From 从起始状态开始，To 到最终状态，结束后回到基础值（1 和 0）
         var fadeAnim = new DoubleAnimation
         {
             From = 0,
@@ -949,7 +880,7 @@ public partial class MainWindow : Window
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             FillBehavior = FillBehavior.Stop
         };
-        ToolContentPanel.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+        RightContentArea.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
 
         var slideAnim = new DoubleAnimation
         {
@@ -959,7 +890,7 @@ public partial class MainWindow : Window
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             FillBehavior = FillBehavior.Stop
         };
-        ToolContentTranslate.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+        RightContentTranslate.BeginAnimation(TranslateTransform.YProperty, slideAnim);
     }
     // ============ 自定义标题栏按钮 ============
 
@@ -994,31 +925,77 @@ public partial class MainWindow : Window
         Resources["AccentColor"] = accentColor;
     }
 
-    private void ApplyTextShadow()
+    private void ApplyTextEffects()
     {
         var store = ViewModel?.LauncherSettings?.Store;
         if (store == null) return;
 
-        bool enable = store.GetBool("EnableTextShadow", false);
+        string mode = store.GetString("TextEffectMode", "None");
+        double blur = store.GetDouble("TextEffectBlur", 8);
+        double opacity = store.GetDouble("TextEffectOpacity", 60) / 100.0;
+        bool useAccent = store.GetBool("AccentGlow", false);
 
-        if (enable)
+        // 颜色基础设置
+        System.Windows.Media.Color glowColor = System.Windows.Media.Colors.White;
+        if (useAccent)
+            glowColor = ParseHexColor(store.GetString("AccentColor", "#5B8DEF"), System.Windows.Media.Colors.Blue);
+
+        // 1. 定义全局文字特效（用来给除了标题以外的所有文字）
+        var globalEffect = new System.Windows.Media.Effects.DropShadowEffect { Opacity = 0 }; // 默认无
+
+        if (mode == "Shadow" || mode == "ShadowAndTitle")
         {
-            // 开启：使用黑色阴影，加深加粗，让白字更清晰
-            Resources["GlobalTextShadow"] = new System.Windows.Media.Effects.DropShadowEffect
+            // 全局文字用阴影
+            globalEffect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                Color = System.Windows.Media.Colors.Black,
-                BlurRadius = 8,       // 范围更大
-                ShadowDepth = 2,      // 偏移更大
-                Opacity = 1.0         // 完全不透明
+                Color = System.Windows.Media.Colors.Black, // 可以在这里改成其他颜色
+                BlurRadius = blur,
+                ShadowDepth = 1,
+                Opacity = opacity
             };
         }
-        else
+        else if (mode == "Glow")
         {
-            Resources["GlobalTextShadow"] = null;
+            // 全局文字用辉光
+            globalEffect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = glowColor,
+                BlurRadius = blur,
+                ShadowDepth = 0, // 不偏移，四周散开
+                Opacity = opacity
+            };
+        }
+
+        // 把全局特效塞给 DynamicResource，所有的 TextBlock 都会去拿这个
+        Resources["GlobalTextShadow"] = globalEffect;
+
+        // 2. 处理大标题专属的底层辉光（GlowText）
+        if (GlowText != null)
+        {
+            if (mode == "Glow" || mode == "TitleOnly" || mode == "ShadowAndTitle")
+            {
+                // 如果是辉光相关模式，显示标题底层的发光层
+                GlowText.Foreground = new System.Windows.Media.SolidColorBrush(glowColor);
+                GlowText.Effect = new System.Windows.Media.Effects.BlurEffect
+                {
+                    Radius = blur,
+                    KernelType = System.Windows.Media.Effects.KernelType.Gaussian,
+                    RenderingBias = System.Windows.Media.Effects.RenderingBias.Quality
+                };
+                GlowText.Opacity = opacity;
+            }
+            else if (mode == "Shadow")
+            {
+                // 如果选的是纯阴影，标题不要辉光层，让标题的字直接去吃 GlobalTextShadow 的阴影
+                GlowText.Opacity = 0;
+            }
+            else
+            {
+                // 关
+                GlowText.Opacity = 0;
+            }
         }
     }
-
-
 
     // ============ 3.3 缩略图点击切换 ============
 
@@ -1052,4 +1029,164 @@ public partial class MainWindow : Window
             targetPvm.Value = imagePath;
         }
     }
+    private System.Windows.Threading.DispatcherTimer? _scrollTimer;
+
+
+    private void MainScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer sv) return;
+        e.Handled = true;
+
+        // 初始化滚动值
+        if (_smoothScrollTimer == null || !_smoothScrollTimer.IsEnabled)
+        {
+            _currentOffset = sv.VerticalOffset;
+            _targetOffset = sv.VerticalOffset;
+        }
+
+        // 累加滚轮距离（如果觉得滚得慢，改这里的 1.0，比如 1.5 或 2.0）
+        _targetOffset -= (e.Delta * 1.0);
+
+        // 边界限制
+        if (_targetOffset < 0) _targetOffset = 0;
+        if (_targetOffset > sv.ScrollableHeight) _targetOffset = sv.ScrollableHeight;
+
+        // 如果没有在滚动，启动动画循环
+        if (_smoothScrollTimer == null)
+        {
+            _smoothScrollTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(10) // 约 60帧/秒
+            };
+
+            _smoothScrollTimer.Tick += (s, args) =>
+            {
+                double diff = _targetOffset - _currentOffset;
+
+                // 距离极小说明到站了
+                if (Math.Abs(diff) < 0.5)
+                {
+                    _currentOffset = _targetOffset;
+                    sv.ScrollToVerticalOffset(_currentOffset);
+                    _smoothScrollTimer.Stop();
+                    return;
+                }
+
+                // 核心缓动公式：每次追向目标的 20%（越小越平滑，越大越快）
+                _currentOffset += diff * 0.2;
+                sv.ScrollToVerticalOffset(_currentOffset);
+            };
+        }
+
+        _smoothScrollTimer.Start();
+    }
+
+
+    /*
+    private void MainScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer sv) return;
+        e.Handled = true;
+
+        // 单次滚动的距离调大（调这个数值决定滚多快）
+        double scrollDistance = e.Delta * 1.5;
+
+        // 如果是第一次滚，或者当前没在滚动，以当前位置为基准
+        if (_scrollTimer == null || !_scrollTimer.IsEnabled)
+            _targetOffset = sv.VerticalOffset;
+
+        _targetOffset -= scrollDistance;
+
+        // 限制边界
+        if (_targetOffset < 0) _targetOffset = 0;
+        if (_targetOffset > sv.ScrollableHeight) _targetOffset = sv.ScrollableHeight;
+
+        // 如果 Timer 已经存在，直接 return，让现有的 Timer 去平滑过渡
+        if (_scrollTimer != null && _scrollTimer.IsEnabled) return;
+
+        _scrollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(15) };
+        _scrollTimer.Tick += (s, args) =>
+        {
+            double current = sv.VerticalOffset;
+            double diff = _targetOffset - current;
+
+            if (Math.Abs(diff) < 1.0)
+            {
+                sv.ScrollToVerticalOffset(_targetOffset);
+                _scrollTimer.Stop();
+                return;
+            }
+
+            // 每次靠近目标的 15%，实现丝滑缓动
+            sv.ScrollToVerticalOffset(current + diff * 0.15);
+        };
+        _scrollTimer.Start();
+    }
+    */
+
+
+    // ============ 侧栏：右键菜单 ============
+
+    private void SideItem_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement fe || fe.DataContext is not ToolViewModel vm)
+            return;
+
+        var menu = new ContextMenu();
+
+        // 1. 打开配置目录
+        var openDirItem = new MenuItem { Header = "打开配置目录" };
+        openDirItem.Click += (_, _) =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", vm.Manifest.Directory);
+            }
+            catch { }
+        };
+        menu.Items.Add(openDirItem);
+
+        // 2. 重启工具
+        var restartItem = new MenuItem { Header = "重启工具" };
+        restartItem.Click += (_, _) =>
+        {
+            vm.Stop();
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(500)
+            };
+            timer.Tick += (s, _) =>
+            {
+                timer.Stop();
+                vm.Start();
+            };
+            timer.Start();
+        };
+        menu.Items.Add(restartItem);
+
+        // 3. 刷新工具列表（刚刚加的）
+        var refreshItem = new MenuItem { Header = "刷新工具列表" };
+        refreshItem.Click += (_, _) =>
+        {
+            ViewModel.RefreshTools();
+        };
+        menu.Items.Add(refreshItem);
+
+        menu.Items.Add(new Separator());
+
+        // 4. 更多设置
+        var moreItem = new MenuItem { Header = "更多设置..." };
+        moreItem.Click += (_, _) =>
+        {
+            System.Windows.MessageBox.Show(
+                "复杂设置（如截图区域预览）由工具自己弹窗，暂未实现。",
+                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+        };
+        menu.Items.Add(moreItem);
+
+        menu.PlacementTarget = fe;
+        menu.IsOpen = true;
+        e.Handled = true;
+    }
+
 }

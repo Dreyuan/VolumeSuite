@@ -8,6 +8,13 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+            <!-- 全局文字特效：强制应用到所有 TextBlock 和 Label -->
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="Effect" Value="{DynamicResource GlobalTextShadow}"/>
+            </Style>
+            <Style TargetType="{x:Type Label}">
+                <Setter Property="Effect" Value="{DynamicResource GlobalTextShadow}"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

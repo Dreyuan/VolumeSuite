@@ -125,8 +125,36 @@ public static class LauncherManifest
                             },
                             new()
                             {
-                                Key = "EnableTextShadow",
-                                Label = "启用文字阴影（增加可读性）",
+                                Key = "TextEffectMode",
+                                Label = "文字阴影/辉光",
+                                Type = "dropdown",
+                                StaticOptions = new List<DropdownOption>
+                                {
+                                    new() { Id = "None", Name = "关" },
+                                    new() { Id = "Shadow", Name = "文字阴影" },
+                                    new() { Id = "Glow", Name = "文字辉光" },
+                                    new() { Id = "TitleOnly", Name = "仅标题辉光" },
+                                    new() { Id = "ShadowAndTitle", Name = "文字阴影+标题辉光" },
+                                }
+                            },
+                            new()
+                            {
+                                Key = "TextEffectBlur",
+                                Label = "范围",
+                                Type = "number",
+                                Min = 0, Max = 30, Step = 1, Decimals = 0, Default = 8,
+                            },
+                            new()
+                            {
+                                Key = "TextEffectOpacity",
+                                Label = "强度 (%)",
+                                Type = "number",
+                                Min = 0, Max = 100, Step = 1, Decimals = 0, Default = 60,
+                            },
+                            new()
+                            {
+                                Key = "AccentGlow",
+                                Label = "强调色辉光",
                                 Type = "bool",
                             },
                         }
